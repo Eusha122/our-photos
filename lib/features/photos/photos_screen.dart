@@ -5,6 +5,7 @@ import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
 import '../../models/media_status.dart';
 import '../../widgets/status_badges.dart';
+import 'gallery_index_controller.dart';
 
 class PhotosScreen extends ConsumerStatefulWidget {
   const PhotosScreen({super.key});
@@ -83,16 +84,43 @@ class _PhotosGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repository = ref.watch(galleryRepositoryProvider);
-    return StreamBuilder<List<GalleryAsset>>(
-      stream: repository.watchPhotos(),
-      builder: (context, snapshot) {
-        final assets = snapshot.data ?? _sampleAssets();
-        return GestureDetector(
-          onScaleUpdate: (details) {
-            if ((details.scale - 1).abs() > 0.03) onScale(details.scale);
-          },
-          child: GridView.builder(
+    final photos = ref.watch(photosStreamProvider);
+    final index = ref.watch(galleryIndexControllerProvider);
+
+    return photos.when(
+      // A DB error surfaces as an honest error state rather than fake data.
+      error: (_, __) => _GalleryStatusView(
+        icon: Icons.error_outline_rounded,
+        title: 'Could not read your library',
+        message: 'Something went wrong while loading your photos.',
+        actionLabel: 'Retry',
+        onAction: () => ref.read(galleryIndexControllerProvider.notifier).retry(),
+      ),
+      loading: () => _GalleryStatusView.forIndex(index, ref),
+      data: (assets) {
+        if (assets.isEmpty) return _GalleryStatusView.forIndex(index, ref);
+        return _buildGrid(assets);
+      },
+    );
+  }
+
+  Widget _buildGrid(List<GalleryAsset> assets) {
+    return GestureDetector(
+      onScaleUpdate: (details) {
+        if ((details.scale - 1).abs() > 0.03) onScale(details.scale);
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // On Android the engine draws a warm-up frame before the surface has
+          // been measured, so the whole tree is laid out at 0x0 (see the
+          // "FlutterRenderer: Width is zero" log). SliverGridDelegateWithMax-
+          // CrossAxisExtent hard-asserts crossAxisExtent > 0, so building the
+          // grid at zero width throws inside flushLayout and wedges the
+          // pipeline. Wait for a real width before creating the grid.
+          if (!constraints.maxWidth.isFinite || constraints.maxWidth <= 0) {
+            return const SizedBox.shrink();
+          }
+          return GridView.builder(
             key: const ValueKey('photos-grid'),
             physics: const BouncingScrollPhysics(),
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
@@ -102,9 +130,170 @@ class _PhotosGrid extends ConsumerWidget {
             ),
             itemCount: assets.length,
             itemBuilder: (context, index) => _AssetTile(asset: assets[index]),
-          ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Full-bleed placeholder shown when there are no photos to display yet:
+/// scanning progress, permission prompts, empty library, or errors.
+class _GalleryStatusView extends StatelessWidget {
+  const _GalleryStatusView({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.secondaryLabel,
+    this.onSecondary,
+    this.progress,
+    this.showSpinner = false,
+  });
+
+  /// Builds the right state widget from the controller's [GalleryIndexState].
+  factory _GalleryStatusView.forIndex(GalleryIndexState index, WidgetRef ref) {
+    final controller = ref.read(galleryIndexControllerProvider.notifier);
+    switch (index.status) {
+      case GalleryStatus.permissionDenied:
+        return _GalleryStatusView(
+          icon: Icons.lock_outline_rounded,
+          title: 'Photo access needed',
+          message:
+              'MemoryVault needs access to your photos and videos to show '
+              'your library.',
+          actionLabel: 'Grant access',
+          onAction: controller.retry,
         );
-      },
+      case GalleryStatus.permissionPermanentlyDenied:
+        return _GalleryStatusView(
+          icon: Icons.lock_outline_rounded,
+          title: 'Photo access is blocked',
+          message:
+              'Enable photo & video access for MemoryVault in system settings '
+              'to see your library.',
+          actionLabel: 'Open settings',
+          onAction: controller.openSettings,
+          secondaryLabel: 'Try again',
+          onSecondary: controller.retry,
+        );
+      case GalleryStatus.error:
+        return _GalleryStatusView(
+          icon: Icons.error_outline_rounded,
+          title: "Couldn't scan your library",
+          message: index.errorMessage ?? 'An unexpected error occurred.',
+          actionLabel: 'Retry',
+          onAction: controller.retry,
+        );
+      case GalleryStatus.checkingPermission:
+      case GalleryStatus.scanning:
+        final counter = index.total > 0
+            ? 'Scanning your library… ${index.processed} of ${index.total}'
+            : 'Scanning your library…';
+        return _GalleryStatusView(
+          icon: Icons.photo_library_outlined,
+          title: 'Building your gallery',
+          message: counter,
+          progress: index.progress,
+          showSpinner: true,
+          actionLabel: 'Cancel',
+          onAction: controller.cancel,
+        );
+      case GalleryStatus.ready:
+        return _GalleryStatusView(
+          icon: Icons.photo_library_outlined,
+          title: 'No photos found',
+          message:
+              'We didn’t find any photos or videos on this device yet.',
+          actionLabel: 'Refresh Library',
+          onAction: controller.retry,
+        );
+      case GalleryStatus.initial:
+        return const _GalleryStatusView(
+          icon: Icons.photo_library_outlined,
+          title: 'Preparing…',
+          message: 'Getting your gallery ready.',
+          showSpinner: true,
+        );
+    }
+  }
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+  final double? progress;
+  final bool showSpinner;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 44, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            if (showSpinner) ...[
+              const SizedBox(height: 22),
+              SizedBox(
+                width: 180,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                  ),
+                ),
+              ),
+            ],
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
+              ),
+            ],
+            if (secondaryLabel != null && onSecondary != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: onSecondary,
+                child: Text(secondaryLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -231,9 +420,13 @@ class _TimelineList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effective = buckets.isEmpty
-        ? ['Today', 'Yesterday', 'July', 'June', '2025', '2024']
-        : buckets.map((bucket) => bucket.title).toList();
+    if (buckets.isEmpty) {
+      return const _SectionEmpty(
+        icon: Icons.schedule_rounded,
+        message: 'Your timeline appears once your photos are indexed.',
+      );
+    }
+    final effective = buckets.map((bucket) => bucket.title).toList();
     return ListView.separated(
       key: const ValueKey('timeline'),
       physics: const BouncingScrollPhysics(),
@@ -259,19 +452,13 @@ class _AlbumList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effective = albums.isEmpty
-        ? [
-            'Camera',
-            'Screenshots',
-            'Downloads',
-            'WhatsApp',
-            'Telegram',
-            'Instagram',
-            'Favorites',
-            'Hidden',
-            'Recycle Bin',
-          ]
-        : albums.map((album) => album.title).toList();
+    if (albums.isEmpty) {
+      return const _SectionEmpty(
+        icon: Icons.photo_album_outlined,
+        message: 'Albums appear here once your device folders are indexed.',
+      );
+    }
+    final effective = albums.map((album) => album.title).toList();
     return GridView.builder(
       key: const ValueKey('albums'),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -296,27 +483,39 @@ class _AlbumList extends StatelessWidget {
   }
 }
 
-List<GalleryAsset> _sampleAssets() {
-  return List.generate(
-    36,
-    (index) => GalleryAsset(
-      id: 'sample-$index',
-      platformId: 'sample-$index',
-      fileName: 'Memory_$index.jpg',
-      kind: index % 8 == 0 ? MediaKind.video : MediaKind.photo,
-      createdAt: DateTime.now().subtract(Duration(days: index)),
-      addedAt: DateTime.now(),
-      width: index.isEven ? 4032 : 3024,
-      height: index.isEven ? 3024 : 4032,
-      sizeBytes: 2400000 + index,
-      cameraModel: index.isEven ? 'Samsung' : 'Pixel',
-      placeName: ['Rajshahi', 'Dhaka', 'Cox\'s Bazar', 'Vietnam'][index % 4],
-      statuses: {
-        MediaStatus.local,
-        if (index % 3 == 0) MediaStatus.backedUp,
-        if (index % 5 == 0) MediaStatus.shared,
-        if (index % 7 == 0) MediaStatus.queued,
-      },
-    ),
-  );
+/// Compact centered empty state for the Timeline / Albums segments.
+class _SectionEmpty extends StatelessWidget {
+  const _SectionEmpty({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 40,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

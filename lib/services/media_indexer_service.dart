@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../core/database/app_database.dart';
-import '../models/media_status.dart';
 import 'backup_queue_service.dart';
 
 class MediaIndexerService {
@@ -15,76 +14,161 @@ class MediaIndexerService {
   final AppDatabase _db;
   final BackupQueueService _backupQueue;
 
+  static const int _pageSize = 200;
+
+  /// Requests gallery access using the platform-appropriate flow.
+  ///
+  /// photo_manager maps this to `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` on
+  /// Android 13+, `READ_EXTERNAL_STORAGE` on Android 12 and below, and the
+  /// limited "selected photos" flow on Android 14 / iOS. The returned
+  /// [PermissionState] reports `authorized`, `limited`, `denied` or
+  /// `restricted`.
   Future<PermissionState> requestGalleryAccess() {
     return PhotoManager.requestPermissionExtend();
   }
 
-  Future<void> indexDeviceGallery({bool enqueueBackup = false}) async {
-    final permission = await requestGalleryAccess();
-    if (!permission.hasAccess) return;
-
-    final paths = await PhotoManager.getAssetPathList(
+  /// Scans the device gallery into the local database.
+  ///
+  /// Assumes access has already been granted by the caller. Rows are keyed by
+  /// the stable platform asset id and written with an insert-or-update clause,
+  /// so repeated (incremental) scans never create duplicates and never clobber
+  /// user-owned columns (favorite / hidden / deleted / statuses / hash /
+  /// place / camera). Only device-provided metadata is refreshed on re-scan.
+  ///
+  /// [onProgress] is invoked with `(processed, total)` as pages complete.
+  /// [shouldContinue] is polled before each page; returning `false` stops the
+  /// scan early (used for cancellation). Returns the number of assets written.
+  Future<int> indexDeviceGallery({
+    bool enqueueBackup = false,
+    void Function(int processed, int total)? onProgress,
+    bool Function()? shouldContinue,
+  }) async {
+    // A single virtual container holding every image + video on the device.
+    final containers = await PhotoManager.getAssetPathList(
       type: RequestType.common,
       hasAll: true,
+      onlyAll: true,
     );
+    if (containers.isEmpty) {
+      onProgress?.call(0, 0);
+      return 0;
+    }
 
-    for (final path in paths) {
-      await _upsertAlbum(path);
-      final assets = await path.getAssetListPaged(page: 0, size: 500);
-      for (final asset in assets) {
-        await _upsertAsset(asset, path.name);
-        if (enqueueBackup) {
+    final all = containers.first;
+    final total = await all.assetCountAsync;
+    onProgress?.call(0, total);
+    if (total == 0) return 0;
+
+    var processed = 0;
+    final pageCount = (total / _pageSize).ceil();
+
+    for (var page = 0; page < pageCount; page++) {
+      if (shouldContinue != null && !shouldContinue()) break;
+
+      final assets = await all.getAssetListPaged(page: page, size: _pageSize);
+      if (assets.isEmpty) break;
+
+      // Batched writes run on Drift's background isolate, so a page of
+      // inserts never blocks the UI thread.
+      await _db.batch((batch) {
+        for (final asset in assets) {
+          batch.insert(
+            _db.mediaAssets,
+            _insertFor(asset),
+            onConflict: DoUpdate(
+              (_) => _metadataUpdateFor(asset),
+              target: [_db.mediaAssets.id],
+            ),
+          );
+        }
+      });
+
+      if (enqueueBackup) {
+        for (final asset in assets) {
           await _backupQueue.enqueue(asset.id);
         }
       }
+
+      processed += assets.length;
+      onProgress?.call(processed, total);
     }
+
+    await _indexAlbums();
+    return processed;
   }
 
-  Future<void> _upsertAlbum(AssetPathEntity path) {
+  MediaAssetsCompanion _insertFor(AssetEntity asset) {
     final now = DateTime.now();
-    return _db.into(_db.albums).insertOnConflictUpdate(
-          AlbumsCompanion.insert(
-            id: 'folder:${path.name}',
-            title: _albumTitle(path.name),
-            sourceFolder: Value(path.name),
-            isAuto: const Value(true),
-            updatedAt: now,
-          ),
-        );
+    return MediaAssetsCompanion.insert(
+      id: asset.id,
+      platformId: asset.id,
+      fileName: asset.title ?? 'IMG_${asset.id}',
+      mediaKind: _kindOf(asset),
+      createdAt: asset.createDateTime,
+      addedAt: now,
+      width: asset.width,
+      height: asset.height,
+      sizeBytes: 0,
+      folderName: Value(asset.relativePath),
+      updatedAt: now,
+    );
   }
 
-  Future<void> _upsertAsset(AssetEntity asset, String folderName) async {
-    final now = DateTime.now();
-    final kind = switch (asset.type) {
+  /// On conflict only device-owned metadata is refreshed; user columns
+  /// (isFavorite / isHidden / isDeleted / statusesCsv / contentHash / place /
+  /// camera) are intentionally omitted so an incremental rescan preserves them.
+  MediaAssetsCompanion _metadataUpdateFor(AssetEntity asset) {
+    return MediaAssetsCompanion(
+      fileName: Value(asset.title ?? 'IMG_${asset.id}'),
+      mediaKind: Value(_kindOf(asset)),
+      createdAt: Value(asset.createDateTime),
+      width: Value(asset.width),
+      height: Value(asset.height),
+      folderName: Value(asset.relativePath),
+      updatedAt: Value(DateTime.now()),
+    );
+  }
+
+  String _kindOf(AssetEntity asset) {
+    return switch (asset.type) {
       AssetType.video => 'video',
       AssetType.image => asset.mimeType == 'image/gif' ? 'gif' : 'photo',
       _ => 'photo',
     };
+  }
 
-    await _db.into(_db.mediaAssets).insertOnConflictUpdate(
-          MediaAssetsCompanion.insert(
-            id: asset.id,
-            platformId: asset.id,
-            fileName: asset.title ?? 'IMG_${asset.id}',
-            mediaKind: kind,
-            createdAt: asset.createDateTime,
-            addedAt: now,
-            width: asset.width,
-            height: asset.height,
-            sizeBytes: 0,
-            folderName: Value(folderName),
-            statusesCsv: Value(MediaStatus.local.name),
+  /// Upserts one album row per on-device folder so the Albums tab reflects the
+  /// real device layout. Cheap: there are only a handful of folders.
+  Future<void> _indexAlbums() async {
+    final folders = await PhotoManager.getAssetPathList(
+      type: RequestType.common,
+      hasAll: false,
+    );
+    if (folders.isEmpty) return;
+
+    final now = DateTime.now();
+    await _db.batch((batch) {
+      for (final folder in folders) {
+        batch.insert(
+          _db.albums,
+          AlbumsCompanion.insert(
+            id: 'folder:${folder.id}',
+            title: _albumTitle(folder.name),
+            sourceFolder: Value(folder.name),
+            isAuto: const Value(true),
             updatedAt: now,
           ),
-        );
-
-    await _db.into(_db.albumAssets).insertOnConflictUpdate(
-          AlbumAssetsCompanion.insert(
-            albumId: 'folder:$folderName',
-            assetId: asset.id,
-            addedAt: now,
+          onConflict: DoUpdate(
+            (_) => AlbumsCompanion(
+              title: Value(_albumTitle(folder.name)),
+              sourceFolder: Value(folder.name),
+              updatedAt: Value(now),
+            ),
+            target: [_db.albums.id],
           ),
         );
+      }
+    });
   }
 
   String _albumTitle(String raw) {

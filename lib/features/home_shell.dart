@@ -1,21 +1,23 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'backup/backup_screen.dart';
 import 'memories/memories_screen.dart';
+import 'photos/gallery_index_controller.dart';
 import 'photos/photos_screen.dart';
 import 'settings/settings_screen.dart';
 import 'shared/shared_screen.dart';
 
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
 
   final _screens = const [
@@ -24,6 +26,16 @@ class _HomeShellState extends State<HomeShell> {
     SharedScreen(),
     BackupScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Begin indexing after the first frame so the UI is never blocked by
+    // permission prompts or the initial gallery scan.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(galleryIndexControllerProvider.notifier).start();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
