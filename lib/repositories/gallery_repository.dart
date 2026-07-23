@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../core/database/app_database.dart';
 import '../models/gallery_asset.dart' as domain;
 import '../models/media_status.dart';
-import '../models/timeline_bucket.dart';
+import '../models/timeline_bucket.dart' as domain;
 
 class GalleryRepository {
   GalleryRepository(this._db);
@@ -51,7 +51,7 @@ class GalleryRepository {
     );
   }
 
-  Future<List<TimelineBucket>> loadTimeline() async {
+  Future<List<domain.TimelineBucket>> loadTimeline() async {
     final assets = (await _db.latestAssets(limit: 5000)).map(_mapAsset).toList();
     final now = DateTime.now();
     final groups = <String, List<domain.GalleryAsset>>{};
@@ -66,7 +66,7 @@ class GalleryRepository {
       final sorted = [...entry.value]..sort(
           (a, b) => b.createdAt.compareTo(a.createdAt),
         );
-      return TimelineBucket(
+      return domain.TimelineBucket(
         title: entry.key,
         assets: sorted,
         start: sorted.last.createdAt,
@@ -89,22 +89,26 @@ class GalleryRepository {
 
   Future<List<domain.GalleryAsset>> searchOffline(String query) async {
     final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return (await _db.latestAssets()).map(_mapAsset).toList();
-    }
+    final rows = await _db.latestAssets(limit: 10000);
+    final assets = rows.map(_mapAsset).toList();
+    if (normalized.isEmpty) return assets;
 
-    final rows = await (_db.select(_db.mediaAssets)
-          ..where(
-            (asset) =>
-                asset.fileName.lower().contains(normalized) |
-                asset.folderName.lower().contains(normalized) |
-                asset.cameraModel.lower().contains(normalized) |
-                asset.placeName.lower().contains(normalized) |
-                asset.mediaKind.lower().contains(normalized),
-          )
-          ..orderBy([(asset) => OrderingTerm.desc(asset.createdAt)]))
-        .get();
-    return rows.map(_mapAsset).toList();
+    return assets.where((asset) {
+      final haystack = [
+        asset.fileName,
+        asset.folderName,
+        asset.cameraMake,
+        asset.cameraModel,
+        asset.placeName,
+        asset.kind.name,
+        asset.isPortrait ? 'portrait' : 'landscape',
+        if (asset.isFavorite) 'favorites',
+        if (asset.isHidden) 'hidden',
+        DateFormat.MMMM().format(asset.createdAt),
+        DateFormat.y().format(asset.createdAt),
+      ].whereType<String>().join(' ').toLowerCase();
+      return haystack.contains(normalized);
+    }).toList();
   }
 
   domain.GalleryAsset _mapAsset(MediaAsset row) {

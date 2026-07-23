@@ -1,0 +1,8 @@
+name = "memoryvault-invites"
+main = "src/index.js"
+compatibility_date = "2026-07-24"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "memoryvault_invites"
+database_id = "replace-with-sites-or-cloudflare-d1-id"
