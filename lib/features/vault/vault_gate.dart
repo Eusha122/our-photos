@@ -8,8 +8,8 @@ class VaultGate {
   final LocalAuthentication _auth;
 
   Future<bool> unlock(BuildContext context) async {
-    final canAuthenticate = await _auth.canCheckBiometrics ||
-        await _auth.isDeviceSupported();
+    final canAuthenticate =
+        await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
     if (!canAuthenticate) return false;
     return _auth.authenticate(
       localizedReason: 'Unlock Hidden Vault',

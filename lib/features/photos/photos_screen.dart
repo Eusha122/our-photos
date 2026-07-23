@@ -39,7 +39,8 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
                 ButtonSegment(value: 2, label: Text('Albums')),
               ],
               selected: {_segment},
-              onSelectionChanged: (value) => setState(() => _segment = value.first),
+              onSelectionChanged: (value) =>
+                  setState(() => _segment = value.first),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -115,7 +116,7 @@ class _AssetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hue = asset.id.hashCode % 360;
+    final hue = asset.id.hashCode.remainder(360).abs();
     return Hero(
       tag: 'asset:${asset.id}',
       child: Material(
@@ -133,8 +134,12 @@ class _AssetTile extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   HSLColor.fromAHSL(1, hue.toDouble(), 0.45, 0.42).toColor(),
-                  HSLColor.fromAHSL(1, (hue + 45).toDouble(), 0.52, 0.62)
-                      .toColor(),
+                  HSLColor.fromAHSL(
+                    1,
+                    ((hue + 45) % 360).toDouble(),
+                    0.52,
+                    0.62,
+                  ).toColor(),
                 ],
               ),
             ),
@@ -151,7 +156,8 @@ class _AssetTile extends StatelessWidget {
                   const Positioned(
                     top: 7,
                     right: 7,
-                    child: Icon(Icons.play_circle_fill_rounded, color: Colors.white),
+                    child: Icon(Icons.play_circle_fill_rounded,
+                        color: Colors.white),
                   ),
               ],
             ),
@@ -176,7 +182,8 @@ class _Viewer extends StatelessWidget {
         foregroundColor: Colors.white,
         actions: const [
           IconButton(onPressed: null, icon: Icon(Icons.ios_share_rounded)),
-          IconButton(onPressed: null, icon: Icon(Icons.favorite_border_rounded)),
+          IconButton(
+              onPressed: null, icon: Icon(Icons.favorite_border_rounded)),
           IconButton(onPressed: null, icon: Icon(Icons.more_horiz_rounded)),
         ],
       ),

@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:typed_data' as typed_data;
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
@@ -70,7 +70,7 @@ class BackupQueueService {
       await _b2.uploadSmallFile(
         credentials: credentials,
         remotePath: remotePath,
-        bytes: Uint8List.fromList(bytes),
+        bytes: typed_data.Uint8List.fromList(bytes),
         sha1: hash,
         contentType: 'application/octet-stream',
       );

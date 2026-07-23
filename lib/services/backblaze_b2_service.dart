@@ -36,7 +36,7 @@ class BackblazeB2Service {
 
   final http.Client _client;
 
-  Future<_B2Auth> authorize(B2Credentials credentials) async {
+  Future<B2Auth> authorize(B2Credentials credentials) async {
     final token = base64Encode(
       utf8.encode('${credentials.keyId}:${credentials.applicationKey}'),
     );
@@ -46,7 +46,7 @@ class BackblazeB2Service {
     );
     _throwIfBad(response, 'B2 authorization failed');
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return _B2Auth(
+    return B2Auth(
       apiUrl: body['apiInfo']['storageApi']['apiUrl'] as String,
       authorizationToken:
           body['apiInfo']['storageApi']['authorizationToken'] as String,
@@ -117,8 +117,8 @@ class BackblazeB2Service {
   }
 }
 
-class _B2Auth {
-  const _B2Auth({
+class B2Auth {
+  const B2Auth({
     required this.apiUrl,
     required this.authorizationToken,
     required this.downloadUrl,

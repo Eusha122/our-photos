@@ -43,22 +43,27 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Create an invite code. Your partner enters it to join a two-person shared album.'),
+                  const Text(
+                      'Create an invite code. Your partner enters it to join a two-person shared album.'),
                   const SizedBox(height: 14),
                   FilledButton.icon(
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
                       try {
-                        final invite = await ref.read(inviteServiceProvider).createInvite(
-                              albumId: 'default-shared-album',
-                              ownerName: 'Owner',
-                            );
+                        final invite =
+                            await ref.read(inviteServiceProvider).createInvite(
+                                  albumId: 'default-shared-album',
+                                  ownerName: 'Owner',
+                                );
                         messenger.showSnackBar(
-                          SnackBar(content: Text('Invite code: ${invite.code}')),
+                          SnackBar(
+                              content: Text('Invite code: ${invite.code}')),
                         );
                       } catch (_) {
                         messenger.showSnackBar(
-                          const SnackBar(content: Text('Invite backend is not configured yet.')),
+                          const SnackBar(
+                              content: Text(
+                                  'Invite backend is not configured yet.')),
                         );
                       }
                     },
@@ -98,7 +103,9 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                         );
                       } catch (_) {
                         messenger.showSnackBar(
-                          const SnackBar(content: Text('Invite code could not be resolved.')),
+                          const SnackBar(
+                              content:
+                                  Text('Invite code could not be resolved.')),
                         );
                       }
                     },

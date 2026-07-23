@@ -50,15 +50,15 @@ class MemoryVaultTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        indicatorColor: accent.withOpacity(0.18),
-        backgroundColor: surface.withOpacity(0.86),
+        indicatorColor: accent.withValues(alpha: 0.18),
+        backgroundColor: surface.withValues(alpha: 0.86),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: scheme.surfaceContainerHighest.withOpacity(0.72),
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );

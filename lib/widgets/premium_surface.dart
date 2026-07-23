@@ -22,20 +22,22 @@ class PremiumSurface extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            scheme.surfaceContainerHighest.withOpacity(0.9),
-            scheme.surface.withOpacity(0.68),
+            scheme.surfaceContainerHighest.withValues(alpha: 0.9),
+            scheme.surface.withValues(alpha: 0.68),
           ],
         ),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(0.32)),
+        border:
+            Border.all(color: scheme.outlineVariant.withValues(alpha: 0.32)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 28,
             offset: const Offset(0, 18),
           ),
           BoxShadow(
-            color: Colors.white.withOpacity(
-              Theme.of(context).brightness == Brightness.dark ? 0.03 : 0.72,
+            color: Colors.white.withValues(
+              alpha:
+                  Theme.of(context).brightness == Brightness.dark ? 0.03 : 0.72,
             ),
             blurRadius: 18,
             offset: const Offset(-6, -8),

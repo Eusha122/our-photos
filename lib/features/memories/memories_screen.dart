@@ -43,9 +43,12 @@ class MemoriesScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 6),
-                    const Text('Local slideshow • Ken Burns • MP4 export ready'),
+                    const Text(
+                        'Local slideshow • Ken Burns • MP4 export ready'),
                   ],
                 ),
               ),

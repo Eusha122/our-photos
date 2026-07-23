@@ -18,9 +18,9 @@ class StatusBadges extends StatelessWidget {
             message: status.label,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.48),
+                color: Colors.black.withValues(alpha: 0.48),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.35)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(3),

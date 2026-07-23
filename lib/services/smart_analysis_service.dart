@@ -21,7 +21,8 @@ class SmartAnalysisService {
     await _record(assetId, 'similar', {'perceptualHash': 'pending'});
     await _record(assetId, 'blur', {'score': 0.0});
     await _record(assetId, 'burst', {'groupId': null});
-    await _record(assetId, 'bestShot', {'score': Random(assetId.hashCode).nextDouble()});
+    await _record(
+        assetId, 'bestShot', {'score': Random(assetId.hashCode).nextDouble()});
     await _record(assetId, 'screenshot', {'detected': false});
     await _record(assetId, 'receipt', {'detected': false});
     await _record(assetId, 'document', {'detected': false});

@@ -25,7 +25,8 @@ class GalleryRepository {
   Future<void> moveToRecycleBin(String assetId) async {
     final now = DateTime.now();
     await _db.transaction(() async {
-      await (_db.update(_db.mediaAssets)..where((row) => row.id.equals(assetId)))
+      await (_db.update(_db.mediaAssets)
+            ..where((row) => row.id.equals(assetId)))
           .write(
         MediaAssetsCompanion(
           isDeleted: const Value(true),
@@ -52,7 +53,8 @@ class GalleryRepository {
   }
 
   Future<List<domain.TimelineBucket>> loadTimeline() async {
-    final assets = (await _db.latestAssets(limit: 5000)).map(_mapAsset).toList();
+    final assets =
+        (await _db.latestAssets(limit: 5000)).map(_mapAsset).toList();
     final now = DateTime.now();
     final groups = <String, List<domain.GalleryAsset>>{};
 

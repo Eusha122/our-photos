@@ -30,9 +30,12 @@ class BackupScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Backblaze B2', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                      Text('Backblaze B2',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w800)),
                       SizedBox(height: 8),
-                      Text('Backup is explicit and queue based. Nothing uploads until you enable B2 and queue items.'),
+                      Text(
+                          'Backup is explicit and queue based. Nothing uploads until you enable B2 and queue items.'),
                     ],
                   ),
                 ),
@@ -106,7 +109,9 @@ class _Metric extends StatelessWidget {
         children: [
           Text(label, style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
         ],
       ),
     );

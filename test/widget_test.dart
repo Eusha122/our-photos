@@ -1,15 +1,29 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:memoryvault/main.dart';
+import 'package:memoryvault/models/media_status.dart';
+import 'package:memoryvault/widgets/status_badges.dart';
 
 void main() {
-  testWidgets('MemoryVault app opens to Photos', (tester) async {
-    await tester.pumpWidget(const MemoryVaultApp());
-    await tester.pumpAndSettle();
+  testWidgets('status badges expose local-first storage states',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: StatusBadges(
+            statuses: {
+              MediaStatus.local,
+              MediaStatus.backedUp,
+              MediaStatus.shared,
+              MediaStatus.queued,
+            },
+          ),
+        ),
+      ),
+    );
 
-    expect(find.text('MemoryVault'), findsOneWidget);
-    expect(find.text('Photos'), findsWidgets);
-    expect(find.text('Memories'), findsOneWidget);
-    expect(find.text('Shared'), findsOneWidget);
-    expect(find.text('Backup'), findsOneWidget);
+    expect(find.byTooltip('Local'), findsOneWidget);
+    expect(find.byTooltip('Backed up'), findsOneWidget);
+    expect(find.byTooltip('Shared'), findsOneWidget);
+    expect(find.byTooltip('Queued'), findsOneWidget);
   });
 }

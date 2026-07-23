@@ -175,7 +175,8 @@ class InviteIdentities extends Table {
 class RecycleBinEntries extends Table {
   TextColumn get assetId => text()();
   DateTimeColumn get deletedAt => dateTime()();
-  TextColumn get originalAlbumIdsCsv => text().withDefault(const Constant(''))();
+  TextColumn get originalAlbumIdsCsv =>
+      text().withDefault(const Constant(''))();
 
   @override
   Set<Column> get primaryKey => {assetId};
