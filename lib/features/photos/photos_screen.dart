@@ -409,6 +409,7 @@ class _GalleryStatusView extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
