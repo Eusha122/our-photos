@@ -42,10 +42,20 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
                 ),
               ),
             ),
-            _GlassSegmentedControl(
-              labels: const ['Photos', 'Timeline', 'Albums'],
+            GlassSelector(
+              count: 3,
               selected: _segment,
-              onChanged: (value) => setState(() => _segment = value),
+              onSelected: (value) => setState(() => _segment = value),
+              height: 40,
+              borderRadius: 22,
+              capsuleRadius: 16,
+              outerPadding: const EdgeInsets.all(4),
+              capsuleInset: 2,
+              blur: 22,
+              itemBuilder: (context, i, selected) => _SegmentLabel(
+                label: const ['Photos', 'Timeline', 'Albums'][i],
+                selected: selected,
+              ),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -306,86 +316,27 @@ class _GalleryStatusView extends StatelessWidget {
   }
 }
 
-/// A glassy iOS-style segmented control with a spring-eased sliding thumb.
-class _GlassSegmentedControl extends StatelessWidget {
-  const _GlassSegmentedControl({
-    required this.labels,
-    required this.selected,
-    required this.onChanged,
-  });
+/// One label inside the glass segmented control.
+class _SegmentLabel extends StatelessWidget {
+  const _SegmentLabel({required this.label, required this.selected});
 
-  final List<String> labels;
-  final int selected;
-  final ValueChanged<int> onChanged;
+  final String label;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return LiquidGlass(
-      borderRadius: 22,
-      blur: 18,
-      padding: const EdgeInsets.all(4),
-      child: SizedBox(
-        height: 42,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final segWidth = constraints.maxWidth / labels.length;
-            return Stack(
-              children: [
-                AnimatedPositionedDirectional(
-                  duration: const Duration(milliseconds: 340),
-                  curve: Curves.easeOutCubic,
-                  start: selected * segWidth,
-                  top: 0,
-                  bottom: 0,
-                  width: segWidth,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: dark ? 0.18 : 0.92),
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Row(
-                  children: [
-                    for (var i = 0; i < labels.length; i++)
-                      Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => onChanged(i),
-                          child: Center(
-                            child: AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 220),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: selected == i
-                                    ? (dark
-                                        ? Colors.white
-                                        : const Color(0xFF171412))
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.55),
-                              ),
-                              child: Text(labels[i]),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            );
-          },
+    return Center(
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 220),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: selected
+              ? (dark ? Colors.white : const Color(0xFF171412))
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
         ),
+        child: Text(label),
       ),
     );
   }

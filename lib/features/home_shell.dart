@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +8,13 @@ import 'photos/gallery_index_controller.dart';
 import 'photos/photos_screen.dart';
 import 'settings/settings_screen.dart';
 import 'shared/shared_screen.dart';
+
+class _NavItem {
+  const _NavItem(this.icon, this.selectedIcon, this.label);
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -28,6 +33,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     BackupScreen(),
   ];
 
+  static const _navItems = [
+    _NavItem(Icons.photo_library_outlined, Icons.photo_library_rounded,
+        'Photos'),
+    _NavItem(Icons.auto_awesome_motion_outlined,
+        Icons.auto_awesome_motion_rounded, 'Memories'),
+    _NavItem(Icons.favorite_border_rounded, Icons.favorite_rounded, 'Shared'),
+    _NavItem(Icons.cloud_queue_rounded, Icons.cloud_done_rounded, 'Backup'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +55,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
+      // No bottomNavigationBar: the dock floats freely over the content.
       body: Stack(
         children: [
           AnimatedSwitcher(
@@ -50,63 +64,89 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             switchOutCurve: Curves.easeInCubic,
             child: _screens[_index],
           ),
+          // Glass settings button.
           Positioned(
             top: MediaQuery.paddingOf(context).top + 12,
             right: 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: IconButton.filledTonal(
-                  tooltip: 'Settings',
-                  icon: const Icon(Icons.person_rounded),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsScreen(),
-                    ),
+            child: LiquidGlass(
+              borderRadius: 26,
+              blur: 20,
+              animate: false,
+              child: IconButton(
+                tooltip: 'Settings',
+                icon: const Icon(Icons.person_rounded),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
                   ),
                 ),
               ),
             ),
           ),
+          // Floating Liquid Glass dock — 18px clear of every edge.
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 18,
+            child: RepaintBoundary(
+              child: GlassSelector(
+                count: _navItems.length,
+                selected: _index,
+                onSelected: (value) => setState(() => _index = value),
+                height: 58,
+                borderRadius: 34,
+                capsuleRadius: 24,
+                outerPadding: const EdgeInsets.all(7),
+                blur: 30,
+                itemBuilder: (context, i, selected) =>
+                    _DockItem(item: _navItems[i], selected: selected),
+              ),
+            ),
+          ),
         ],
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: LiquidGlass(
-          borderRadius: 28,
-          blur: 26,
-          child: NavigationBar(
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            selectedIndex: _index,
-            height: 72,
-            onDestinationSelected: (value) => setState(() => _index = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.photo_library_outlined),
-                selectedIcon: Icon(Icons.photo_library_rounded),
-                label: 'Photos',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.auto_awesome_motion_outlined),
-                selectedIcon: Icon(Icons.auto_awesome_motion_rounded),
-                label: 'Memories',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.favorite_border_rounded),
-                selectedIcon: Icon(Icons.favorite_rounded),
-                label: 'Shared',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.cloud_queue_rounded),
-                selectedIcon: Icon(Icons.cloud_done_rounded),
-                label: 'Backup',
-              ),
-            ],
+    );
+  }
+}
+
+class _DockItem extends StatelessWidget {
+  const _DockItem({required this.item, required this.selected});
+
+  final _NavItem item;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+    final color = selected
+        ? (dark ? Colors.white : const Color(0xFF171412))
+        : scheme.onSurface.withValues(alpha: 0.6);
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: selected ? 1 : 0),
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) => Icon(
+            selected ? item.selectedIcon : item.icon,
+            color: color,
+            size: 23 + 2 * t,
           ),
         ),
-      ),
+        const SizedBox(height: 3),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: color,
+          ),
+          child: Text(item.label),
+        ),
+      ],
     );
   }
 }
