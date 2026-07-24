@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../widgets/liquid_glass.dart';
 import 'backup/backup_screen.dart';
 import 'memories/memories_screen.dart';
 import 'photos/gallery_index_controller.dart';
@@ -72,37 +73,37 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-            child: NavigationBar(
-              selectedIndex: _index,
-              height: 72,
-              onDestinationSelected: (value) => setState(() => _index = value),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.photo_library_outlined),
-                  selectedIcon: Icon(Icons.photo_library_rounded),
-                  label: 'Photos',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.auto_awesome_motion_outlined),
-                  selectedIcon: Icon(Icons.auto_awesome_motion_rounded),
-                  label: 'Memories',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.favorite_border_rounded),
-                  selectedIcon: Icon(Icons.favorite_rounded),
-                  label: 'Shared',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.cloud_queue_rounded),
-                  selectedIcon: Icon(Icons.cloud_done_rounded),
-                  label: 'Backup',
-                ),
-              ],
-            ),
+        child: LiquidGlass(
+          borderRadius: 28,
+          blur: 26,
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            selectedIndex: _index,
+            height: 72,
+            onDestinationSelected: (value) => setState(() => _index = value),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.photo_library_outlined),
+                selectedIcon: Icon(Icons.photo_library_rounded),
+                label: 'Photos',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.auto_awesome_motion_outlined),
+                selectedIcon: Icon(Icons.auto_awesome_motion_rounded),
+                label: 'Memories',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.favorite_border_rounded),
+                selectedIcon: Icon(Icons.favorite_rounded),
+                label: 'Shared',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.cloud_queue_rounded),
+                selectedIcon: Icon(Icons.cloud_done_rounded),
+                label: 'Backup',
+              ),
+            ],
           ),
         ),
       ),

@@ -98,7 +98,8 @@ class _PhotosGrid extends ConsumerWidget {
         title: 'Could not read your library',
         message: 'Something went wrong while loading your photos.',
         actionLabel: 'Retry',
-        onAction: () => ref.read(galleryIndexControllerProvider.notifier).retry(),
+        onAction: () =>
+            ref.read(galleryIndexControllerProvider.notifier).retry(),
       ),
       loading: () => _GalleryStatusView.forIndex(index, ref),
       data: (assets) {
@@ -129,11 +130,16 @@ class _PhotosGrid extends ConsumerWidget {
             physics: const BouncingScrollPhysics(),
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: tileSize,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
             itemCount: assets.length,
-            itemBuilder: (context, index) => _AssetTile(asset: assets[index]),
+            itemBuilder: (context, index) => _AssetTile(
+              asset: assets[index],
+              onOpen: () => Navigator.of(context).push(
+                mediaViewerRoute(assets: assets, initialIndex: index),
+              ),
+            ),
           );
         },
       ),
@@ -164,8 +170,7 @@ class _GalleryStatusView extends StatelessWidget {
         return _GalleryStatusView(
           icon: Icons.lock_outline_rounded,
           title: 'Photo access needed',
-          message:
-              'MemoryVault needs access to your photos and videos to show '
+          message: 'Our Photos needs access to your photos and videos to show '
               'your library.',
           actionLabel: 'Grant access',
           onAction: controller.retry,
@@ -175,7 +180,7 @@ class _GalleryStatusView extends StatelessWidget {
           icon: Icons.lock_outline_rounded,
           title: 'Photo access is blocked',
           message:
-              'Enable photo & video access for MemoryVault in system settings '
+              'Enable photo & video access for Our Photos in system settings '
               'to see your library.',
           actionLabel: 'Open settings',
           onAction: controller.openSettings,
@@ -208,8 +213,7 @@ class _GalleryStatusView extends StatelessWidget {
         return _GalleryStatusView(
           icon: Icons.photo_library_outlined,
           title: 'No photos found',
-          message:
-              'We didn’t find any photos or videos on this device yet.',
+          message: 'We didn’t find any photos or videos on this device yet.',
           actionLabel: 'Refresh Library',
           onAction: controller.retry,
         );
@@ -302,50 +306,133 @@ class _GalleryStatusView extends StatelessWidget {
   }
 }
 
+/// A glassy iOS-style segmented control with a spring-eased sliding thumb.
+class _GlassSegmentedControl extends StatelessWidget {
+  const _GlassSegmentedControl({
+    required this.labels,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<String> labels;
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return LiquidGlass(
+      borderRadius: 22,
+      blur: 18,
+      padding: const EdgeInsets.all(4),
+      child: SizedBox(
+        height: 42,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final segWidth = constraints.maxWidth / labels.length;
+            return Stack(
+              children: [
+                AnimatedPositionedDirectional(
+                  duration: const Duration(milliseconds: 340),
+                  curve: Curves.easeOutCubic,
+                  start: selected * segWidth,
+                  top: 0,
+                  bottom: 0,
+                  width: segWidth,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: dark ? 0.18 : 0.92),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < labels.length; i++)
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onChanged(i),
+                          child: Center(
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 220),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: selected == i
+                                    ? (dark
+                                        ? Colors.white
+                                        : const Color(0xFF171412))
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.55),
+                              ),
+                              child: Text(labels[i]),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _AssetTile extends StatelessWidget {
-  const _AssetTile({required this.asset});
+  const _AssetTile({required this.asset, required this.onOpen});
 
   final GalleryAsset asset;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final hue = asset.id.hashCode.remainder(360).abs();
-    return Hero(
-      tag: 'asset:${asset.id}',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => _Viewer(asset: asset),
-            ),
-          ),
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: LinearGradient(
-                colors: [
-                  HSLColor.fromAHSL(1, hue.toDouble(), 0.45, 0.42).toColor(),
-                  HSLColor.fromAHSL(
-                    1,
-                    ((hue + 45) % 360).toDouble(),
-                    0.52,
-                    0.62,
-                  ).toColor(),
-                ],
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0, 1),
+        child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
+      ),
+      child: _Pressable(
+        onTap: onOpen,
+        child: Hero(
+          tag: 'asset:${asset.id}',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    HSLColor.fromAHSL(1, hue.toDouble(), 0.45, 0.42).toColor(),
+                    HSLColor.fromAHSL(
+                      1,
+                      ((hue + 45) % 360).toDouble(),
+                      0.52,
+                      0.62,
+                    ).toColor(),
+                  ],
+                ),
               ),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Real device thumbnail; the gradient above shows through until
-                // it decodes, then it fades in. Backed by Flutter's bounded
-                // ImageCache so scrolling reuses decoded thumbnails.
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image(
-                    image: _AssetThumbProvider(asset.platformId),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image(
+                    image: AssetThumbnailProvider(asset.platformId),
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
                     frameBuilder:
@@ -353,7 +440,7 @@ class _AssetTile extends StatelessWidget {
                       if (wasSynchronouslyLoaded) return child;
                       return AnimatedOpacity(
                         opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 220),
+                        duration: const Duration(milliseconds: 260),
                         curve: Curves.easeOut,
                         child: child,
                       );
@@ -361,21 +448,22 @@ class _AssetTile extends StatelessWidget {
                     errorBuilder: (context, error, stack) =>
                         const SizedBox.shrink(),
                   ),
-                ),
-                Positioned(
-                  left: 7,
-                  right: 7,
-                  bottom: 7,
-                  child: StatusBadges(statuses: asset.statuses),
-                ),
-                if (asset.kind == MediaKind.video)
-                  const Positioned(
-                    top: 7,
+                  if (asset.kind == MediaKind.video)
+                    const Center(
+                      child: Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                  Positioned(
+                    left: 7,
                     right: 7,
-                    child: Icon(Icons.play_circle_fill_rounded,
-                        color: Colors.white),
+                    bottom: 7,
+                    child: StatusBadges(statuses: asset.statuses),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -384,79 +472,34 @@ class _AssetTile extends StatelessWidget {
   }
 }
 
-class _Viewer extends StatelessWidget {
-  const _Viewer({required this.asset});
+/// Adds a subtle press-in scale for a tactile, premium feel.
+class _Pressable extends StatefulWidget {
+  const _Pressable({required this.child, required this.onTap});
 
-  final GalleryAsset asset;
+  final Widget child;
+  final VoidCallback onTap;
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _down = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        actions: const [
-          IconButton(onPressed: null, icon: Icon(Icons.ios_share_rounded)),
-          IconButton(
-              onPressed: null, icon: Icon(Icons.favorite_border_rounded)),
-          IconButton(onPressed: null, icon: Icon(Icons.more_horiz_rounded)),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: Hero(
-                tag: 'asset:${asset.id}',
-                child: InteractiveViewer(
-                  child: AspectRatio(
-                    aspectRatio: asset.width / asset.height,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF2B2B2B), Color(0xFF77736A)],
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image(
-                          image: _AssetThumbProvider(
-                            asset.platformId,
-                            pixelSize: 1200,
-                          ),
-                          fit: BoxFit.cover,
-                          frameBuilder:
-                              (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded) return child;
-                            return AnimatedOpacity(
-                              opacity: frame == null ? 0 : 1,
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
-                              child: child,
-                            );
-                          },
-                          errorBuilder: (context, error, stack) =>
-                              const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          ListTile(
-            textColor: Colors.white,
-            iconColor: Colors.white,
-            title: Text(asset.fileName),
-            subtitle: Text(
-              '${asset.width} x ${asset.height} • ${asset.cameraModel ?? 'Unknown camera'}',
-            ),
-            trailing: StatusBadges(statuses: asset.statuses),
-          ),
-        ],
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) {
+        setState(() => _down = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _down = false),
+      child: AnimatedScale(
+        scale: _down ? 0.95 : 1,
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }
@@ -567,64 +610,4 @@ class _SectionEmpty extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Loads a device photo/video thumbnail by its platform id.
-///
-/// Implemented as a real [ImageProvider] so decoded thumbnails live in
-/// Flutter's global [ImageCache]: bounded memory, automatic eviction, and
-/// reuse when a tile scrolls back into view. The stored `platformId` is the
-/// photo_manager asset id, resolved lazily on first decode.
-@immutable
-class _AssetThumbProvider extends ImageProvider<_AssetThumbProvider> {
-  const _AssetThumbProvider(this.assetId, {this.pixelSize = 320});
-
-  final String assetId;
-  final int pixelSize;
-
-  @override
-  Future<_AssetThumbProvider> obtainKey(ImageConfiguration configuration) {
-    return SynchronousFuture<_AssetThumbProvider>(this);
-  }
-
-  @override
-  ImageStreamCompleter loadImage(
-    _AssetThumbProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return OneFrameImageStreamCompleter(
-      _loadAsync(key, decode),
-      informationCollector: () => [ErrorDescription('Asset id: $assetId')],
-    );
-  }
-
-  Future<ImageInfo> _loadAsync(
-    _AssetThumbProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    final entity = await AssetEntity.fromId(assetId);
-    if (entity == null) {
-      throw StateError('Asset $assetId is no longer available');
-    }
-    final bytes = await entity.thumbnailDataWithSize(
-      ThumbnailSize.square(pixelSize),
-    );
-    if (bytes == null) {
-      throw StateError('No thumbnail data for asset $assetId');
-    }
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    final codec = await decode(buffer);
-    final frame = await codec.getNextFrame();
-    return ImageInfo(image: frame.image);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is _AssetThumbProvider &&
-        other.assetId == assetId &&
-        other.pixelSize == pixelSize;
-  }
-
-  @override
-  int get hashCode => Object.hash(assetId, pixelSize);
 }

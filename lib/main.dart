@@ -16,7 +16,7 @@ class MemoryVaultApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'MemoryVault',
+      title: 'Our Photos',
       themeMode: ThemeMode.system,
       theme: MemoryVaultTheme.light(),
       darkTheme: MemoryVaultTheme.dark(),

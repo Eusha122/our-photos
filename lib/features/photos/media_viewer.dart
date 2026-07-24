@@ -82,8 +82,7 @@ class _MediaViewerState extends State<MediaViewer> {
               itemCount: widget.assets.length,
               onPageChanged: (i) => setState(() => _index = i),
               scrollPhysics: const BouncingScrollPhysics(),
-              backgroundDecoration:
-                  const BoxDecoration(color: Colors.black),
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
               builder: (context, index) {
                 final item = widget.assets[index];
                 final tag = 'asset:${item.id}';
