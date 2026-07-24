@@ -5,6 +5,7 @@ import '../../core/database/app_database.dart' show Album;
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
 import '../../models/timeline_bucket.dart' as domain;
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/skeuomorphic.dart';
 import 'asset_group_screen.dart';
 import 'asset_thumbnail.dart';
@@ -42,6 +43,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
   int _segment = 0;
   double _tileSize = 112;
   final Set<String> _selectedIds = {};
+  final Set<String> _removingIds = {};
 
   bool get _selectionMode => _selectedIds.isNotEmpty;
 
@@ -58,9 +60,33 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
   void _clearSelection() => setState(_selectedIds.clear);
 
   Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    final confirmed = await SkeuConfirmDialog.show(
+      context,
+      icon: Icons.delete_outline_rounded,
+      title: 'Move to Trash?',
+      message: count == 1
+          ? 'This item will be moved to the Trash. Items in the Trash are '
+              'automatically deleted forever after 20 days.'
+          : 'These $count items will be moved to the Trash. Items in the '
+              'Trash are automatically deleted forever after 20 days.',
+      confirmLabel: 'Move to Trash',
+    );
+    if (confirmed != true) return;
+
     final ids = _selectedIds.toList();
-    setState(_selectedIds.clear);
+    // Let the tiles visibly shrink away before the stream-driven grid
+    // actually reflows around their absence — an instant list splice reads
+    // as an abrupt jump cut, this reads as something being physically
+    // lifted out.
+    setState(() {
+      _removingIds.addAll(ids);
+      _selectedIds.clear();
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 220));
     await ref.read(galleryRepositoryProvider).moveMultipleToRecycleBin(ids);
+    if (!mounted) return;
+    setState(() => _removingIds.removeAll(ids));
   }
 
   // 0 = header fully shown, 1 = fully collapsed. During a scroll this tracks
@@ -128,6 +154,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
                       () => _tileSize = (_tileSize / scale).clamp(76, 176),
                     ),
                     selectedIds: _selectedIds,
+                    removingIds: _removingIds,
                     selectionMode: _selectionMode,
                     onEnterSelection: _enterSelection,
                     onToggleSelect: _toggleSelect,
@@ -156,14 +183,27 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
             left: 0,
             right: 0,
             height: topPadding,
-            child: _selectionMode
-                ? _SelectionBar(
-                    count: _selectedIds.length,
-                    onCancel: _clearSelection,
-                    onDelete: _deleteSelected,
-                  )
-                : AnimatedBuilder(
-                    animation: _collapse,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween(begin: 0.94, end: 1.0).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: _selectionMode
+                  ? _SelectionBar(
+                      key: const ValueKey('selection-bar'),
+                      count: _selectedIds.length,
+                      onCancel: _clearSelection,
+                      onDelete: _deleteSelected,
+                    )
+                  : AnimatedBuilder(
+                      key: const ValueKey('collapsing-header'),
+                      animation: _collapse,
                     // `child` is the fully static content — a dark scrim (so the
                     // title/segmented control stay legible over colorful photos,
                     // no blur, matching the skeuomorphic material language rather
@@ -244,6 +284,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
                       ),
                     ),
                   ),
+            ),
           ),
         ],
       ),
@@ -317,6 +358,7 @@ class _PhotosGrid extends ConsumerWidget {
     required this.topPadding,
     required this.onScale,
     required this.selectedIds,
+    required this.removingIds,
     required this.selectionMode,
     required this.onEnterSelection,
     required this.onToggleSelect,
@@ -326,6 +368,7 @@ class _PhotosGrid extends ConsumerWidget {
   final double topPadding;
   final ValueChanged<double> onScale;
   final Set<String> selectedIds;
+  final Set<String> removingIds;
   final bool selectionMode;
   final ValueChanged<String> onEnterSelection;
   final ValueChanged<String> onToggleSelect;
@@ -389,47 +432,86 @@ class _PhotosGrid extends ConsumerWidget {
             itemBuilder: (context, index) {
               final asset = assets[index];
               final selected = selectedIds.contains(asset.id);
+              final removing = removingIds.contains(asset.id);
               return GestureDetector(
                 onLongPress:
                     selectionMode ? null : () => onEnterSelection(asset.id),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    AssetTile(
-                      asset: asset,
-                      onOpen: selectionMode
-                          ? () => onToggleSelect(asset.id)
-                          : () => Navigator.of(context).push(
-                                mediaViewerRoute(
-                                  assets: assets,
-                                  initialIndex: index,
+                child: AnimatedScale(
+                  scale: removing ? 0.55 : 1,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInCubic,
+                  child: AnimatedOpacity(
+                    opacity: removing ? 0 : 1,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInCubic,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AssetTile(
+                          asset: asset,
+                          onOpen: selectionMode
+                              ? () => onToggleSelect(asset.id)
+                              : () => Navigator.of(context).push(
+                                    mediaViewerRoute(
+                                      assets: assets,
+                                      initialIndex: index,
+                                    ),
+                                  ),
+                        ),
+                        IgnorePointer(
+                          child: AnimatedOpacity(
+                            opacity: selected ? 1 : 0,
+                            duration: const Duration(milliseconds: 160),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: SkeuPalette.titanium,
+                                  width: 3,
                                 ),
+                                color: Colors.black.withValues(alpha: 0.18),
                               ),
-                    ),
-                    if (selectionMode)
-                      Positioned(
-                        top: 7,
-                        left: 7,
-                        child: SizedBox.square(
-                          dimension: 24,
-                          child: SkeuContainer(
-                            material: selected
-                                ? SkeuMaterial.aluminum
-                                : SkeuMaterial.graphite,
-                            radius: 12,
-                            lift: 0.5,
-                            texture: false,
-                            child: selected
-                                ? const Icon(
-                                    Icons.check_rounded,
-                                    size: 15,
-                                    color: Color(0xFF111111),
-                                  )
-                                : const SizedBox.shrink(),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                        Positioned(
+                          top: 7,
+                          left: 7,
+                          child: AnimatedScale(
+                            scale: selectionMode ? 1 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutBack,
+                            child: AnimatedOpacity(
+                              opacity: selectionMode ? 1 : 0,
+                              duration: const Duration(milliseconds: 140),
+                              child: SizedBox.square(
+                                dimension: 24,
+                                child: SkeuContainer(
+                                  material: selected
+                                      ? SkeuMaterial.aluminum
+                                      : SkeuMaterial.graphite,
+                                  radius: 12,
+                                  lift: 0.5,
+                                  texture: false,
+                                  child: AnimatedScale(
+                                    scale: selected ? 1 : 0,
+                                    duration:
+                                        const Duration(milliseconds: 160),
+                                    curve: Curves.easeOutBack,
+                                    child: const Icon(
+                                      Icons.check_rounded,
+                                      size: 15,
+                                      color: Color(0xFF111111),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               );
             },

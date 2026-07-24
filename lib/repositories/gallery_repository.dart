@@ -96,6 +96,26 @@ class GalleryRepository {
     });
   }
 
+  /// The retention window shown to the user before they move anything to
+  /// the trash — after this, items are purged for good.
+  static const trashRetention = Duration(days: 20);
+
+  /// Everything that has sat in the trash longer than [trashRetention].
+  /// Callers must still delete the real device files (via
+  /// [MediaIndexerService.deleteFromDevice]) before calling
+  /// [permanentlyDeleteRows] — this only finds the candidates.
+  Future<List<domain.GalleryAsset>> loadExpiredTrash() async {
+    final cutoff = DateTime.now().subtract(trashRetention);
+    final query = _db.select(_db.mediaAssets)
+      ..where(
+        (row) =>
+            row.isDeleted.equals(true) &
+            row.updatedAt.isSmallerThanValue(cutoff),
+      );
+    final rows = await query.get();
+    return rows.map(_mapAsset).toList();
+  }
+
   Future<void> hideAsset(String assetId, bool hidden) {
     return (_db.update(_db.mediaAssets)..where((row) => row.id.equals(assetId)))
         .write(

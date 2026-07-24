@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
+import '../../repositories/gallery_repository.dart';
 import '../../services/media_indexer_service.dart';
 
 /// Lifecycle of the on-device gallery scan, observed by the Photos screen.
@@ -84,16 +87,21 @@ final trashStreamProvider =
 
 final galleryIndexControllerProvider =
     StateNotifierProvider<GalleryIndexController, GalleryIndexState>((ref) {
-  return GalleryIndexController(ref.watch(mediaIndexerProvider));
+  return GalleryIndexController(
+    ref.watch(mediaIndexerProvider),
+    ref.watch(galleryRepositoryProvider),
+  );
 });
 
 /// Owns the whole permission → index → progress → error → retry flow. The UI
 /// never touches the indexer directly; it only observes [GalleryIndexState]
 /// and calls the intent methods below.
 class GalleryIndexController extends StateNotifier<GalleryIndexState> {
-  GalleryIndexController(this._indexer) : super(const GalleryIndexState());
+  GalleryIndexController(this._indexer, this._repository)
+      : super(const GalleryIndexState());
 
   final MediaIndexerService _indexer;
+  final GalleryRepository _repository;
 
   bool _started = false;
   bool _running = false;
@@ -158,6 +166,12 @@ class GalleryIndexController extends StateNotifier<GalleryIndexState> {
 
       if (!mounted) return;
       state = state.copyWith(status: GalleryStatus.ready);
+
+      // Enforce the 20-day trash retention we advertise to the user — items
+      // past it are actually gone, not just hidden, so this genuinely
+      // deletes the device files too. Runs opportunistically on each launch
+      // rather than needing a background service, same as most gallery apps.
+      unawaited(_purgeExpiredTrash());
     } catch (error) {
       if (!mounted) return;
       state = state.copyWith(
@@ -166,6 +180,24 @@ class GalleryIndexController extends StateNotifier<GalleryIndexState> {
       );
     } finally {
       _running = false;
+    }
+  }
+
+  Future<void> _purgeExpiredTrash() async {
+    try {
+      final expired = await _repository.loadExpiredTrash();
+      if (expired.isEmpty) return;
+      final deletedPlatformIds = await _indexer.deleteFromDevice(
+        expired.map((a) => a.platformId).toList(),
+      );
+      final deletedIds = expired
+          .where((a) => deletedPlatformIds.contains(a.platformId))
+          .map((a) => a.id)
+          .toList();
+      await _repository.permanentlyDeleteRows(deletedIds);
+    } catch (_) {
+      // Best-effort background cleanup — a failure here shouldn't affect
+      // the gallery the user is actively looking at.
     }
   }
 
