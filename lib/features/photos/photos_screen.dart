@@ -1,5 +1,9 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
@@ -335,6 +339,29 @@ class _AssetTile extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Real device thumbnail; the gradient above shows through until
+                // it decodes, then it fades in. Backed by Flutter's bounded
+                // ImageCache so scrolling reuses decoded thumbnails.
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image(
+                    image: _AssetThumbProvider(asset.platformId),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    errorBuilder: (context, error, stack) =>
+                        const SizedBox.shrink(),
+                  ),
+                ),
                 Positioned(
                   left: 7,
                   right: 7,
@@ -390,6 +417,28 @@ class _Viewer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         gradient: const LinearGradient(
                           colors: [Color(0xFF2B2B2B), Color(0xFF77736A)],
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image(
+                          image: _AssetThumbProvider(
+                            asset.platformId,
+                            pixelSize: 1200,
+                          ),
+                          fit: BoxFit.cover,
+                          frameBuilder:
+                              (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded) return child;
+                            return AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOut,
+                              child: child,
+                            );
+                          },
+                          errorBuilder: (context, error, stack) =>
+                              const SizedBox.shrink(),
                         ),
                       ),
                     ),
@@ -518,4 +567,64 @@ class _SectionEmpty extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Loads a device photo/video thumbnail by its platform id.
+///
+/// Implemented as a real [ImageProvider] so decoded thumbnails live in
+/// Flutter's global [ImageCache]: bounded memory, automatic eviction, and
+/// reuse when a tile scrolls back into view. The stored `platformId` is the
+/// photo_manager asset id, resolved lazily on first decode.
+@immutable
+class _AssetThumbProvider extends ImageProvider<_AssetThumbProvider> {
+  const _AssetThumbProvider(this.assetId, {this.pixelSize = 320});
+
+  final String assetId;
+  final int pixelSize;
+
+  @override
+  Future<_AssetThumbProvider> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<_AssetThumbProvider>(this);
+  }
+
+  @override
+  ImageStreamCompleter loadImage(
+    _AssetThumbProvider key,
+    ImageDecoderCallback decode,
+  ) {
+    return OneFrameImageStreamCompleter(
+      _loadAsync(key, decode),
+      informationCollector: () => [ErrorDescription('Asset id: $assetId')],
+    );
+  }
+
+  Future<ImageInfo> _loadAsync(
+    _AssetThumbProvider key,
+    ImageDecoderCallback decode,
+  ) async {
+    final entity = await AssetEntity.fromId(assetId);
+    if (entity == null) {
+      throw StateError('Asset $assetId is no longer available');
+    }
+    final bytes = await entity.thumbnailDataWithSize(
+      ThumbnailSize.square(pixelSize),
+    );
+    if (bytes == null) {
+      throw StateError('No thumbnail data for asset $assetId');
+    }
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final codec = await decode(buffer);
+    final frame = await codec.getNextFrame();
+    return ImageInfo(image: frame.image);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AssetThumbProvider &&
+        other.assetId == assetId &&
+        other.pixelSize == pixelSize;
+  }
+
+  @override
+  int get hashCode => Object.hash(assetId, pixelSize);
 }
