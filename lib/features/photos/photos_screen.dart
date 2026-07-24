@@ -545,22 +545,28 @@ class _PressableState extends State<_Pressable> {
 }
 
 class _TimelineList extends StatelessWidget {
-  const _TimelineList({required this.buckets});
+  const _TimelineList({
+    required this.buckets,
+    required this.topPadding,
+  });
 
   final List<dynamic> buckets;
+  final double topPadding;
 
   @override
   Widget build(BuildContext context) {
     if (buckets.isEmpty) {
-      return const _SectionEmpty(
+      return _SectionEmpty(
         icon: Icons.schedule_rounded,
         message: 'Your timeline appears once your photos are indexed.',
+        topPadding: topPadding,
       );
     }
     final effective = buckets.map((bucket) => bucket.title).toList();
     return ListView.separated(
       key: const ValueKey('timeline'),
       physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockOverlap),
       itemBuilder: (context, index) => SkeuPressAnimation(
         onTap: () {},
         child: SkeuSurface(
@@ -600,21 +606,27 @@ class _TimelineList extends StatelessWidget {
 }
 
 class _AlbumList extends StatelessWidget {
-  const _AlbumList({required this.albums});
+  const _AlbumList({
+    required this.albums,
+    required this.topPadding,
+  });
 
   final List<dynamic> albums;
+  final double topPadding;
 
   @override
   Widget build(BuildContext context) {
     if (albums.isEmpty) {
-      return const _SectionEmpty(
+      return _SectionEmpty(
         icon: Icons.photo_album_outlined,
         message: 'Albums appear here once your device folders are indexed.',
+        topPadding: topPadding,
       );
     }
     final effective = albums.map((album) => album.title).toList();
     return GridView.builder(
       key: const ValueKey('albums'),
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockOverlap),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
@@ -642,17 +654,25 @@ class _AlbumList extends StatelessWidget {
 
 /// Compact centered empty state for the Timeline / Albums segments.
 class _SectionEmpty extends StatelessWidget {
-  const _SectionEmpty({required this.icon, required this.message});
+  const _SectionEmpty({
+    super.key,
+    required this.icon,
+    required this.message,
+    required this.topPadding,
+  });
 
   final IconData icon;
   final String message;
+  final double topPadding;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, bottom: _dockOverlap),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -672,6 +692,7 @@ class _SectionEmpty extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
