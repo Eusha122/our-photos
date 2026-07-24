@@ -125,20 +125,35 @@ class SkeuContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: SkeuShadow.outer(lift: lift),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: CustomPaint(
-          painter: _SkeuSurfacePainter(
-            material: material,
-            radius: radius,
-            texture: texture,
+    // Two RepaintBoundary layers, for two different reasons:
+    //  - The outer one caches this whole surface (gradient + brushed/grain
+    //    texture + inset-shadow blur stroke — the expensive part) as its own
+    //    GPU layer, so it isn't re-rastered just because something ELSE on
+    //    screen repaints (e.g. a sibling's scroll or an ancestor rebuild).
+    //  - The inner one isolates `child` so that ITS OWN animations (a button
+    //    press, the spring-driven selection capsule, an icon size tween)
+    //    stop at that boundary instead of forcing the whole CustomPainter
+    //    above (gradient + texture + MaskFilter.blur — all genuinely
+    //    expensive Skia work) to re-run on every single animation frame.
+    // Without this, every press/spring/tween anywhere in the app was
+    // repainting its enclosing material's full texture+blur each frame —
+    // the actual cause of the app-wide jank.
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: SkeuShadow.outer(lift: lift),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: CustomPaint(
+            painter: _SkeuSurfacePainter(
+              material: material,
+              radius: radius,
+              texture: texture,
+            ),
+            child: RepaintBoundary(child: child),
           ),
-          child: child,
         ),
       ),
     );

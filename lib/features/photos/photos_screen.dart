@@ -17,64 +17,135 @@ class PhotosScreen extends ConsumerStatefulWidget {
   ConsumerState<PhotosScreen> createState() => _PhotosScreenState();
 }
 
+/// Height of the header content (title + gap + segmented control) below the
+/// safe-area inset — used so scrollable content knows how much top padding
+/// to reserve, and so the header knows how far to slide away when hidden.
+const double _headerContentHeight = 140;
+
+/// How much of the dock's own footprint (74 tall + 18 bottom margin) the
+/// content is allowed to scroll *under*. Deliberately small: the dock should
+/// float directly over the last row of photos, not sit above a bare gutter.
+const double _dockOverlap = 24;
+
 class _PhotosScreenState extends ConsumerState<PhotosScreen> {
   int _segment = 0;
   double _tileSize = 112;
+  bool _headerVisible = true;
+
+  // The segmented control lives in the collapsing header (not the bottom
+  // dock, which always stays put) — scrolling down tucks it away for more
+  // viewing room; scrolling up, or reaching the top, brings it back.
+  bool _handleScroll(ScrollNotification notification) {
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta;
+      if (delta == null || delta.abs() < 3) return false;
+      final shouldShow = delta < 0;
+      if (shouldShow != _headerVisible) {
+        setState(() => _headerVisible = shouldShow);
+      }
+    } else if (notification is ScrollEndNotification) {
+      final metrics = notification.metrics;
+      if (metrics.pixels <= metrics.minScrollExtent && !_headerVisible) {
+        setState(() => _headerVisible = true);
+      }
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final repository = ref.watch(galleryRepositoryProvider);
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 4, top: 2, bottom: 16),
-              child: Text(
-                'Our Photos',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
+    final topPadding = MediaQuery.paddingOf(context).top + _headerContentHeight;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handleScroll,
+      child: Stack(
+        children: [
+          // Full-bleed content: its own top/bottom padding reserves room for
+          // the header and dock, but that padding scrolls away with the rest
+          // of the content — so photos genuinely pass behind both, rather
+          // than stopping short in a dead gutter.
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              child: switch (_segment) {
+                0 => _PhotosGrid(
+                    key: const ValueKey('grid'),
+                    tileSize: _tileSize,
+                    topPadding: topPadding,
+                    onScale: (scale) => setState(
+                      () => _tileSize = (_tileSize / scale).clamp(76, 176),
+                    ),
+                  ),
+                1 => FutureBuilder(
+                    key: const ValueKey('timeline'),
+                    future: repository.loadTimeline(),
+                    builder: (context, snapshot) => _TimelineList(
+                      buckets: snapshot.data ?? const [],
+                      topPadding: topPadding,
+                    ),
+                  ),
+                _ => FutureBuilder(
+                    key: const ValueKey('albums'),
+                    future: repository.loadAlbums(),
+                    builder: (context, snapshot) => _AlbumList(
+                      albums: snapshot.data ?? const [],
+                      topPadding: topPadding,
+                    ),
+                  ),
+              },
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              offset: _headerVisible ? Offset.zero : const Offset(0, -1.2),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _headerVisible ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: !_headerVisible,
+                  child: RepaintBoundary(
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(left: 4, bottom: 16),
+                              child: Text(
+                                'Our Photos',
+                                style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ),
+                            SkeuSegmentedControl(
+                              labels: const ['Photos', 'Timeline', 'Albums'],
+                              selected: _segment,
+                              onSelected: (value) => setState(() {
+                                _segment = value;
+                                _headerVisible = true;
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            SkeuSegmentedControl(
-              labels: const ['Photos', 'Timeline', 'Albums'],
-              selected: _segment,
-              onSelected: (value) => setState(() => _segment = value),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                child: switch (_segment) {
-                  0 => _PhotosGrid(
-                      tileSize: _tileSize,
-                      onScale: (scale) => setState(
-                        () => _tileSize = (_tileSize / scale).clamp(76, 176),
-                      ),
-                    ),
-                  1 => FutureBuilder(
-                      future: repository.loadTimeline(),
-                      builder: (context, snapshot) => _TimelineList(
-                        buckets: snapshot.data ?? const [],
-                      ),
-                    ),
-                  _ => FutureBuilder(
-                      future: repository.loadAlbums(),
-                      builder: (context, snapshot) => _AlbumList(
-                        albums: snapshot.data ?? const [],
-                      ),
-                    ),
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
