@@ -9,6 +9,22 @@ import '../../models/gallery_asset.dart';
 import '../../repositories/gallery_repository.dart';
 import '../../services/media_indexer_service.dart';
 
+/// How much the Photos screen's own header has scrolled away (0 = fully
+/// shown, 1 = fully collapsed) and whether multi-select is active. HomeShell
+/// reads this to keep the floating avatar button moving and fading in
+/// lockstep with that header, and to hide it entirely during selection —
+/// it lives outside PhotosScreen because the avatar button is owned by
+/// HomeShell (it's shared chrome across every tab), not by PhotosScreen.
+class PhotosChromeState {
+  const PhotosChromeState({this.collapse = 0, this.selectionMode = false});
+
+  final double collapse;
+  final bool selectionMode;
+}
+
+final photosChromeStateProvider =
+    StateProvider<PhotosChromeState>((ref) => const PhotosChromeState());
+
 /// Lifecycle of the on-device gallery scan, observed by the Photos screen.
 enum GalleryStatus {
   initial,

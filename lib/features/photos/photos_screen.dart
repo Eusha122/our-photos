@@ -24,7 +24,9 @@ class PhotosScreen extends ConsumerStatefulWidget {
 /// Height of the header content (title + gap + segmented control) below the
 /// safe-area inset — used so scrollable content knows how much top padding
 /// to reserve, and so the header knows how far to slide away when hidden.
-const double _headerContentHeight = 140;
+/// Public so HomeShell's avatar button can slide by the exact same distance
+/// and stay in lockstep with this header instead of guessing at a number.
+const double kPhotosHeaderContentHeight = 140;
 
 /// How much of the dock's own footprint (74 tall + 18 bottom margin) the
 /// content is allowed to scroll *under*. Deliberately small: the dock should
@@ -46,41 +48,30 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
   final Set<String> _selectedIds = {};
   final Set<String> _removingIds = {};
 
-  // A one-shot dim "pulse" over the whole grid — rises then falls back out —
-  // that plays once, at the exact moment a long-press lifts a photo into
-  // selection mode. Together with the haptic tap and the tile's own
-  // pop-scale, this is the iOS long-press-to-select feel: a tactile jolt,
-  // the background recedes, then it's handed back to you to keep selecting.
-  //
-  // This is a flat alpha dim, not a real-time Gaussian blur. A live
-  // BackdropFilter has to re-sample and re-blur everything behind it on
-  // every single animation frame — expensive over a whole grid of photos —
-  // and doing that concurrently with the tile's pop-scale is exactly what
-  // reads as jank/lag. A cheap dim keeps the "background recedes" feeling
-  // genuinely smooth, which is the actual goal.
-  late final AnimationController _selectPulseController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 320),
-  );
-  late final Animation<double> _selectPulse = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween(begin: 0.0, end: 1.0)
-          .chain(CurveTween(curve: Curves.easeOutCubic)),
-      weight: 30,
-    ),
-    TweenSequenceItem(
-      tween: Tween(begin: 1.0, end: 0.0)
-          .chain(CurveTween(curve: Curves.easeInCubic)),
-      weight: 70,
-    ),
-  ]).animate(_selectPulseController);
-
   bool get _selectionMode => _selectedIds.isNotEmpty;
+
+  // Captured eagerly in initState (not merely `late`, which would defer the
+  // `ref.read` to whenever `_chrome` is first touched — possibly dispose()
+  // itself, where Riverpod's `ref` is already invalid) rather than read at
+  // each call site, because dispose() needs to write to it too.
+  late final StateController<PhotosChromeState> _chrome;
+
+  // Publishes this screen's collapse amount + selection state so HomeShell's
+  // avatar button (which it owns, since it's shared across every tab) can
+  // move and fade exactly in step with this screen's own header, and hide
+  // while a multi-select is in progress — rather than sitting fixed in the
+  // corner, detached from everything happening beneath it.
+  void _syncChrome() {
+    _chrome.state = PhotosChromeState(
+      collapse: _collapse.value,
+      selectionMode: _selectionMode,
+    );
+  }
 
   void _enterSelection(String assetId) {
     HapticFeedback.mediumImpact();
-    _selectPulseController.forward(from: 0);
     setState(() => _selectedIds.add(assetId));
+    _syncChrome();
   }
 
   void _toggleSelect(String assetId) {
@@ -88,9 +79,13 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
     setState(() {
       if (!_selectedIds.remove(assetId)) _selectedIds.add(assetId);
     });
+    _syncChrome();
   }
 
-  void _clearSelection() => setState(_selectedIds.clear);
+  void _clearSelection() {
+    setState(_selectedIds.clear);
+    _syncChrome();
+  }
 
   Future<void> _deleteSelected() async {
     final count = _selectedIds.length;
@@ -116,6 +111,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
       _removingIds.addAll(ids);
       _selectedIds.clear();
     });
+    _syncChrome();
     await Future<void>.delayed(const Duration(milliseconds: 220));
     await ref.read(galleryRepositoryProvider).moveMultipleToRecycleBin(ids);
     if (!mounted) return;
@@ -134,9 +130,19 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
     duration: const Duration(milliseconds: 180),
   );
 
+  @override
+  void initState() {
+    super.initState();
+    _chrome = ref.read(photosChromeStateProvider.notifier);
+    // Every tick of the header's own collapse animation also updates the
+    // shared chrome state, so the avatar button moves in the exact same
+    // frame-by-frame lockstep as the header — not a separately-timed copy.
+    _collapse.addListener(_syncChrome);
+  }
+
   bool _handleScroll(ScrollNotification notification) {
     final headerHeight =
-        MediaQuery.paddingOf(context).top + _headerContentHeight;
+        MediaQuery.paddingOf(context).top + kPhotosHeaderContentHeight;
     if (headerHeight <= 0) return false;
 
     if (notification is ScrollUpdateNotification) {
@@ -158,15 +164,19 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
 
   @override
   void dispose() {
+    _collapse.removeListener(_syncChrome);
     _collapse.dispose();
-    _selectPulseController.dispose();
+    // Leaving the Photos tab shouldn't leave the avatar stuck hidden/faded
+    // on other tabs, which never touch this state themselves.
+    _chrome.state = const PhotosChromeState();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final repository = ref.watch(galleryRepositoryProvider);
-    final topPadding = MediaQuery.paddingOf(context).top + _headerContentHeight;
+    final topPadding =
+        MediaQuery.paddingOf(context).top + kPhotosHeaderContentHeight;
 
     return NotificationListener<ScrollNotification>(
       onNotification: _handleScroll,
@@ -210,26 +220,6 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
                     ),
                   ),
               },
-            ),
-          ),
-          // The long-press dim pulse — see _selectPulse above. Ignored for
-          // hit-testing throughout, since the tap that triggered it has
-          // already been consumed by the tile. A RepaintBoundary isolates
-          // this from the grid so neither forces the other to repaint.
-          Positioned.fill(
-            child: IgnorePointer(
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: _selectPulse,
-                  builder: (context, child) {
-                    final t = _selectPulse.value;
-                    if (t <= 0.001) return const SizedBox.shrink();
-                    return ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.32 * t),
-                    );
-                  },
-                ),
-              ),
             ),
           ),
           Positioned(

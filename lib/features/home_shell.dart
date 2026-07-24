@@ -10,6 +10,13 @@ import 'settings/settings_screen.dart';
 import 'shared/shared_screen.dart';
 import 'trash/trash_screen.dart';
 
+/// Same span the Photos header slides through
+/// ([kPhotosHeaderContentHeight] plus the safe-area inset), so the avatar
+/// tracks it at the exact same rate instead of visibly lagging or overtaking
+/// it mid-scroll.
+double _avatarSlideDistance(BuildContext context) =>
+    MediaQuery.paddingOf(context).top + kPhotosHeaderContentHeight;
+
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
@@ -66,6 +73,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Only the Photos tab ever writes to this — on every other tab it sits
+    // at its default (collapse: 0, selectionMode: false), so the avatar
+    // just behaves normally there.
+    final chrome = ref.watch(photosChromeStateProvider);
     return Scaffold(
       body: Stack(
         children: [
@@ -85,10 +96,35 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           Positioned(
             top: MediaQuery.paddingOf(context).top + 12,
             right: 16,
-            child: SkeuAvatar(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SettingsScreen(),
+            // Selection is a discrete on/off flip, so it gets its own short
+            // animated fade+shrink; the scroll-collapse slide underneath it
+            // is driven straight off `chrome.collapse` every frame with no
+            // extra animation wrapper, since that value is already smooth —
+            // wrapping it in another Animated* would just add lag behind
+            // the header it's supposed to be glued to.
+            child: IgnorePointer(
+              ignoring: chrome.selectionMode || chrome.collapse > 0.5,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                opacity: chrome.selectionMode ? 0 : 1,
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  scale: chrome.selectionMode ? 0.7 : 1,
+                  child: Transform.translate(
+                    offset: Offset(
+                      0,
+                      -_avatarSlideDistance(context) * chrome.collapse,
+                    ),
+                    child: SkeuAvatar(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
