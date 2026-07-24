@@ -342,73 +342,74 @@ class _GalleryStatusView extends StatelessWidget {
       child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox.square(
-              dimension: 96,
-              child: SkeuContainer(
-                material: SkeuMaterial.aluminum,
-                radius: 48,
-                child: Icon(icon, size: 44, color: const Color(0xFF121212)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox.square(
+                dimension: 96,
+                child: SkeuContainer(
+                  material: SkeuMaterial.aluminum,
+                  radius: 48,
+                  child: Icon(icon, size: 44, color: const Color(0xFF121212)),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
-            ),
-            if (showSpinner) ...[
-              const SizedBox(height: 22),
-              SizedBox(
-                width: 180,
-                child: SkeuSurface(
-                  material: SkeuMaterial.graphite,
-                  radius: 8,
-                  padding: const EdgeInsets.all(4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: (progress ?? 0.18).clamp(0.08, 1),
-                      child: const SizedBox(
-                        height: 7,
-                        child: SkeuContainer(
-                          material: SkeuMaterial.aluminum,
-                          radius: 5,
-                          child: SizedBox.expand(),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+              if (showSpinner) ...[
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: 180,
+                  child: SkeuSurface(
+                    material: SkeuMaterial.graphite,
+                    radius: 8,
+                    padding: const EdgeInsets.all(4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: (progress ?? 0.18).clamp(0.08, 1),
+                        child: const SizedBox(
+                          height: 7,
+                          child: SkeuContainer(
+                            material: SkeuMaterial.aluminum,
+                            radius: 5,
+                            child: SizedBox.expand(),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 24),
+                SkeuButton(label: actionLabel!, onTap: onAction),
+              ],
+              if (secondaryLabel != null && onSecondary != null) ...[
+                const SizedBox(height: 8),
+                SkeuButton(
+                  label: secondaryLabel!,
+                  onTap: onSecondary,
+                  compact: true,
+                ),
+              ],
             ],
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              SkeuButton(label: actionLabel!, onTap: onAction),
-            ],
-            if (secondaryLabel != null && onSecondary != null) ...[
-              const SizedBox(height: 8),
-              SkeuButton(
-                label: secondaryLabel!,
-                onTap: onSecondary,
-                compact: true,
-              ),
-            ],
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -672,26 +673,26 @@ class _SectionEmpty extends StatelessWidget {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 40,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 40,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
