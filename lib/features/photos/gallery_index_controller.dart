@@ -76,6 +76,12 @@ final photosStreamProvider =
   return ref.watch(galleryRepositoryProvider).watchPhotos();
 });
 
+/// Live stream of soft-deleted photos, for the Trash tab.
+final trashStreamProvider =
+    StreamProvider.autoDispose<List<GalleryAsset>>((ref) {
+  return ref.watch(galleryRepositoryProvider).watchTrash();
+});
+
 final galleryIndexControllerProvider =
     StateNotifierProvider<GalleryIndexController, GalleryIndexState>((ref) {
   return GalleryIndexController(ref.watch(mediaIndexerProvider));

@@ -8,6 +8,7 @@ import 'photos/gallery_index_controller.dart';
 import 'photos/photos_screen.dart';
 import 'settings/settings_screen.dart';
 import 'shared/shared_screen.dart';
+import 'trash/trash_screen.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -24,6 +25,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     MemoriesScreen(),
     SharedScreen(),
     BackupScreen(),
+    TrashScreen(),
   ];
 
   static const _navItems = [
@@ -46,6 +48,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       icon: Icons.cloud_queue_rounded,
       selectedIcon: Icons.cloud_done_rounded,
       label: 'Backup',
+    ),
+    SkeuNavItem(
+      icon: Icons.delete_outline_rounded,
+      selectedIcon: Icons.delete_rounded,
+      label: 'Trash',
     ),
   ];
 

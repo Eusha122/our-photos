@@ -41,6 +41,27 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
     with SingleTickerProviderStateMixin {
   int _segment = 0;
   double _tileSize = 112;
+  final Set<String> _selectedIds = {};
+
+  bool get _selectionMode => _selectedIds.isNotEmpty;
+
+  void _enterSelection(String assetId) {
+    setState(() => _selectedIds.add(assetId));
+  }
+
+  void _toggleSelect(String assetId) {
+    setState(() {
+      if (!_selectedIds.remove(assetId)) _selectedIds.add(assetId);
+    });
+  }
+
+  void _clearSelection() => setState(_selectedIds.clear);
+
+  Future<void> _deleteSelected() async {
+    final ids = _selectedIds.toList();
+    setState(_selectedIds.clear);
+    await ref.read(galleryRepositoryProvider).moveMultipleToRecycleBin(ids);
+  }
 
   // 0 = header fully shown, 1 = fully collapsed. During a scroll this tracks
   // the raw delta 1:1 (jumps, no animation) so the header follows the finger
@@ -106,6 +127,10 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
                     onScale: (scale) => setState(
                       () => _tileSize = (_tileSize / scale).clamp(76, 176),
                     ),
+                    selectedIds: _selectedIds,
+                    selectionMode: _selectionMode,
+                    onEnterSelection: _enterSelection,
+                    onToggleSelect: _toggleSelect,
                   ),
                 1 => FutureBuilder(
                     key: const ValueKey('timeline'),
@@ -131,83 +156,155 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
             left: 0,
             right: 0,
             height: topPadding,
-            child: AnimatedBuilder(
-              animation: _collapse,
-              // `child` is the fully static content — a dark scrim (so the
-              // title/segmented control stay legible over colorful photos,
-              // no blur, matching the skeuomorphic material language rather
-              // than glassmorphism) plus the header itself. Wrapping it in
-              // RepaintBoundary lets the engine cache it as one layer and
-              // just re-*position* that layer every scroll frame instead of
-              // re-rastering the gradient/text/segmented-control each tick.
-              child: RepaintBoundary(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              SkeuPalette.backgroundBottom
-                                  .withValues(alpha: 0.96),
-                              SkeuPalette.backgroundBottom
-                                  .withValues(alpha: 0.86),
-                              SkeuPalette.backgroundBottom.withValues(alpha: 0),
-                            ],
-                            stops: const [0, 0.62, 1],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4, bottom: 16),
-                              child: Text(
-                                'Our Photos',
-                                style: TextStyle(
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
+            child: _selectionMode
+                ? _SelectionBar(
+                    count: _selectedIds.length,
+                    onCancel: _clearSelection,
+                    onDelete: _deleteSelected,
+                  )
+                : AnimatedBuilder(
+                    animation: _collapse,
+                    // `child` is the fully static content — a dark scrim (so the
+                    // title/segmented control stay legible over colorful photos,
+                    // no blur, matching the skeuomorphic material language rather
+                    // than glassmorphism) plus the header itself. Wrapping it in
+                    // RepaintBoundary lets the engine cache it as one layer and
+                    // just re-*position* that layer every scroll frame instead of
+                    // re-rastering the gradient/text/segmented-control each tick.
+                    child: RepaintBoundary(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    SkeuPalette.backgroundBottom
+                                        .withValues(alpha: 0.96),
+                                    SkeuPalette.backgroundBottom
+                                        .withValues(alpha: 0.86),
+                                    SkeuPalette.backgroundBottom
+                                        .withValues(alpha: 0),
+                                  ],
+                                  stops: const [0, 0.62, 1],
                                 ),
                               ),
                             ),
-                            SkeuSegmentedControl(
-                              labels: const ['Photos', 'Timeline', 'Albums'],
-                              selected: _segment,
-                              onSelected: (value) => setState(() {
-                                _segment = value;
-                                _collapse.animateTo(
-                                  0,
-                                  duration: const Duration(milliseconds: 180),
-                                  curve: Curves.easeOutCubic,
-                                );
-                              }),
+                          ),
+                          SafeArea(
+                            bottom: false,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const Padding(
+                                    padding:
+                                        EdgeInsets.only(left: 4, bottom: 16),
+                                    child: Text(
+                                      'Our Photos',
+                                      style: TextStyle(
+                                        fontSize: 36,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  SkeuSegmentedControl(
+                                    labels: const [
+                                      'Photos',
+                                      'Timeline',
+                                      'Albums'
+                                    ],
+                                    selected: _segment,
+                                    onSelected: (value) => setState(() {
+                                      _segment = value;
+                                      _collapse.animateTo(
+                                        0,
+                                        duration:
+                                            const Duration(milliseconds: 180),
+                                        curve: Curves.easeOutCubic,
+                                      );
+                                    }),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              builder: (context, child) => IgnorePointer(
-                ignoring: _collapse.value > 0.5,
-                child: Transform.translate(
-                  offset: Offset(0, -topPadding * _collapse.value),
-                  child: child,
-                ),
-              ),
-            ),
+                    builder: (context, child) => IgnorePointer(
+                      ignoring: _collapse.value > 0.5,
+                      child: Transform.translate(
+                        offset: Offset(0, -topPadding * _collapse.value),
+                        child: child,
+                      ),
+                    ),
+                  ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Replaces the collapsing title/segmented-control header while one or more
+/// photos are selected — always fully visible (no scroll-collapse) so the
+/// delete action is never accidentally scrolled out of reach.
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar({
+    required this.count,
+    required this.onCancel,
+    required this.onDelete,
+  });
+
+  final int count;
+  final VoidCallback onCancel;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          child: SkeuSurface(
+            material: SkeuMaterial.graphite,
+            radius: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              children: [
+                SkeuIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Cancel',
+                  size: 40,
+                  onTap: onCancel,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$count selected',
+                    style: const TextStyle(
+                      color: SkeuPalette.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                SkeuIconButton(
+                  icon: Icons.delete_outline_rounded,
+                  tooltip: 'Move to Trash',
+                  size: 40,
+                  onTap: onDelete,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -219,11 +316,19 @@ class _PhotosGrid extends ConsumerWidget {
     required this.tileSize,
     required this.topPadding,
     required this.onScale,
+    required this.selectedIds,
+    required this.selectionMode,
+    required this.onEnterSelection,
+    required this.onToggleSelect,
   });
 
   final double tileSize;
   final double topPadding;
   final ValueChanged<double> onScale;
+  final Set<String> selectedIds;
+  final bool selectionMode;
+  final ValueChanged<String> onEnterSelection;
+  final ValueChanged<String> onToggleSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -281,12 +386,53 @@ class _PhotosGrid extends ConsumerWidget {
               mainAxisSpacing: 8,
             ),
             itemCount: assets.length,
-            itemBuilder: (context, index) => AssetTile(
-              asset: assets[index],
-              onOpen: () => Navigator.of(context).push(
-                mediaViewerRoute(assets: assets, initialIndex: index),
-              ),
-            ),
+            itemBuilder: (context, index) {
+              final asset = assets[index];
+              final selected = selectedIds.contains(asset.id);
+              return GestureDetector(
+                onLongPress:
+                    selectionMode ? null : () => onEnterSelection(asset.id),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AssetTile(
+                      asset: asset,
+                      onOpen: selectionMode
+                          ? () => onToggleSelect(asset.id)
+                          : () => Navigator.of(context).push(
+                                mediaViewerRoute(
+                                  assets: assets,
+                                  initialIndex: index,
+                                ),
+                              ),
+                    ),
+                    if (selectionMode)
+                      Positioned(
+                        top: 7,
+                        left: 7,
+                        child: SizedBox.square(
+                          dimension: 24,
+                          child: SkeuContainer(
+                            material: selected
+                                ? SkeuMaterial.aluminum
+                                : SkeuMaterial.graphite,
+                            radius: 12,
+                            lift: 0.5,
+                            texture: false,
+                            child: selected
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    size: 15,
+                                    color: Color(0xFF111111),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),

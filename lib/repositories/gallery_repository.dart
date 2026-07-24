@@ -22,23 +22,77 @@ class GalleryRepository {
         .write(MediaAssetsCompanion(isFavorite: Value(isFavorite)));
   }
 
-  Future<void> moveToRecycleBin(String assetId) async {
+  Future<void> moveToRecycleBin(String assetId) =>
+      moveMultipleToRecycleBin([assetId]);
+
+  /// Soft-deletes several assets at once (multi-select delete) — same
+  /// per-item logic as [moveToRecycleBin], batched in one transaction.
+  Future<void> moveMultipleToRecycleBin(List<String> assetIds) async {
+    if (assetIds.isEmpty) return;
     final now = DateTime.now();
+    await _db.transaction(() async {
+      for (final assetId in assetIds) {
+        await (_db.update(_db.mediaAssets)
+              ..where((row) => row.id.equals(assetId)))
+            .write(
+          MediaAssetsCompanion(
+            isDeleted: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+        await _db.into(_db.recycleBinEntries).insertOnConflictUpdate(
+              RecycleBinEntriesCompanion.insert(
+                assetId: assetId,
+                deletedAt: now,
+              ),
+            );
+      }
+    });
+  }
+
+  /// Everything currently in the trash, most recently deleted first.
+  Stream<List<domain.GalleryAsset>> watchTrash() {
+    final query = _db.select(_db.mediaAssets)
+      ..where((row) => row.isDeleted.equals(true))
+      ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]);
+    return query.watch().map((rows) => rows.map(_mapAsset).toList());
+  }
+
+  /// Brings an asset back out of the trash.
+  Future<void> restoreFromTrash(String assetId) async {
     await _db.transaction(() async {
       await (_db.update(_db.mediaAssets)
             ..where((row) => row.id.equals(assetId)))
           .write(
         MediaAssetsCompanion(
-          isDeleted: const Value(true),
-          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          updatedAt: Value(DateTime.now()),
         ),
       );
-      await _db.into(_db.recycleBinEntries).insertOnConflictUpdate(
-            RecycleBinEntriesCompanion.insert(
-              assetId: assetId,
-              deletedAt: now,
-            ),
-          );
+      await (_db.delete(_db.recycleBinEntries)
+            ..where((row) => row.assetId.equals(assetId)))
+          .go();
+    });
+  }
+
+  /// Removes assets from this app's database entirely. Callers are
+  /// responsible for also deleting the underlying device files first (via
+  /// [MediaIndexerService.deleteFromDevice]) — this only cleans up rows so a
+  /// permanent delete never leaves dangling references in albums/timeline.
+  Future<void> permanentlyDeleteRows(List<String> assetIds) async {
+    if (assetIds.isEmpty) return;
+    await _db.transaction(() async {
+      for (final assetId in assetIds) {
+        await (_db.delete(_db.albumAssets)
+              ..where((row) => row.assetId.equals(assetId)))
+            .go();
+        await (_db.delete(_db.recycleBinEntries)
+              ..where((row) => row.assetId.equals(assetId)))
+            .go();
+        await (_db.delete(_db.mediaAssets)
+              ..where((row) => row.id.equals(assetId)))
+            .go();
+      }
     });
   }
 
@@ -96,7 +150,9 @@ class GalleryRepository {
       ..where(_db.mediaAssets.isDeleted.equals(false))
       ..orderBy([OrderingTerm.desc(_db.mediaAssets.createdAt)]);
     final rows = await query.get();
-    return rows.map((row) => _mapAsset(row.readTable(_db.mediaAssets))).toList();
+    return rows
+        .map((row) => _mapAsset(row.readTable(_db.mediaAssets)))
+        .toList();
   }
 
   /// Curated groupings of real photos — replaces what used to be ten

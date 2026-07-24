@@ -27,6 +27,17 @@ class MediaIndexerService {
     return PhotoManager.requestPermissionExtend();
   }
 
+  /// Permanently deletes assets from the device's own media store —
+  /// irreversible, and separate from this app's soft-delete/trash. On
+  /// Android the OS shows its own confirmation dialog for this (required by
+  /// scoped storage); the user can decline it for some or all of the ids.
+  /// Returns the platform ids that were actually deleted, so the caller only
+  /// removes matching rows from the local database.
+  Future<List<String>> deleteFromDevice(List<String> platformIds) async {
+    if (platformIds.isEmpty) return const [];
+    return PhotoManager.editor.deleteWithIds(platformIds);
+  }
+
   /// Scans the device gallery into the local database.
   ///
   /// Assumes access has already been granted by the caller. Rows are keyed by
