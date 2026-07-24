@@ -152,9 +152,15 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
 }
 
 class _PhotosGrid extends ConsumerWidget {
-  const _PhotosGrid({required this.tileSize, required this.onScale});
+  const _PhotosGrid({
+    super.key,
+    required this.tileSize,
+    required this.topPadding,
+    required this.onScale,
+  });
 
   final double tileSize;
+  final double topPadding;
   final ValueChanged<double> onScale;
 
   @override
@@ -169,12 +175,15 @@ class _PhotosGrid extends ConsumerWidget {
         title: 'Could not read your library',
         message: 'Something went wrong while loading your photos.',
         actionLabel: 'Retry',
+        topPadding: topPadding,
         onAction: () =>
             ref.read(galleryIndexControllerProvider.notifier).retry(),
       ),
-      loading: () => _GalleryStatusView.forIndex(index, ref),
+      loading: () => _GalleryStatusView.forIndex(index, ref, topPadding),
       data: (assets) {
-        if (assets.isEmpty) return _GalleryStatusView.forIndex(index, ref);
+        if (assets.isEmpty) {
+          return _GalleryStatusView.forIndex(index, ref, topPadding);
+        }
         return _buildGrid(assets);
       },
     );
@@ -199,6 +208,7 @@ class _PhotosGrid extends ConsumerWidget {
           return GridView.builder(
             key: const ValueKey('photos-grid'),
             physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockOverlap),
             // Pre-builds/decodes items further outside the viewport so fast
             // flings don't reveal blank tiles — smoother perceived scroll.
             // ignore: deprecated_member_use
