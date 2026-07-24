@@ -1,15 +1,14 @@
-import 'dart:ui' as ui;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
 import '../../models/media_status.dart';
+import '../../widgets/liquid_glass.dart';
 import '../../widgets/status_badges.dart';
+import 'asset_thumbnail.dart';
 import 'gallery_index_controller.dart';
+import 'media_viewer.dart';
 
 class PhotosScreen extends ConsumerStatefulWidget {
   const PhotosScreen({super.key});
@@ -30,22 +29,23 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'MemoryVault',
-              style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+            const Padding(
+              padding: EdgeInsets.only(left: 4, top: 2, bottom: 16),
+              child: Text(
+                'Our Photos',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
             ),
-            const SizedBox(height: 14),
-            SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('Photos')),
-                ButtonSegment(value: 1, label: Text('Timeline')),
-                ButtonSegment(value: 2, label: Text('Albums')),
-              ],
-              selected: {_segment},
-              onSelectionChanged: (value) =>
-                  setState(() => _segment = value.first),
+            _GlassSegmentedControl(
+              labels: const ['Photos', 'Timeline', 'Albums'],
+              selected: _segment,
+              onChanged: (value) => setState(() => _segment = value),
             ),
             const SizedBox(height: 16),
             Expanded(
