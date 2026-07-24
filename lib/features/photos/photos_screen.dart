@@ -100,15 +100,16 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              offset: _headerVisible ? Offset.zero : const Offset(0, -1.2),
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: _headerVisible ? 1 : 0,
-                child: IgnorePointer(
-                  ignoring: !_headerVisible,
+            height: topPadding,
+            child: IgnorePointer(
+              ignoring: !_headerVisible,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                offset: _headerVisible ? Offset.zero : const Offset(0, -1),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _headerVisible ? 1 : 0,
                   child: RepaintBoundary(
                     child: SafeArea(
                       bottom: false,
