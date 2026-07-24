@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/skeuomorphic.dart';
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -17,19 +19,75 @@ class SettingsScreen extends StatelessWidget {
       ('About', Icons.info_rounded),
     ];
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: settings.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final (title, icon) = settings[index];
-          return ListTile(
-            leading: Icon(icon),
-            title: Text(title),
-            trailing: const Icon(Icons.chevron_right_rounded),
-          );
-        },
+      body: SkeuPageBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SkeuIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      tooltip: 'Back',
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    const SizedBox(width: 14),
+                    const Text(
+                      'Settings',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: SkeuPalette.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Expanded(
+                  child: ListView.separated(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: settings.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final (title, icon) = settings[index];
+                      return SkeuPressAnimation(
+                        onTap: () {},
+                        child: SkeuSurface(
+                          material: SkeuMaterial.graphite,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(icon, color: SkeuPalette.titanium),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: SkeuPalette.ink,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: SkeuPalette.muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

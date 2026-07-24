@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../widgets/premium_surface.dart';
+import '../../widgets/skeuomorphic.dart';
 
 class BackupScreen extends ConsumerWidget {
   const BackupScreen({super.key});
@@ -27,6 +28,7 @@ class BackupScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 const PremiumSurface(
+                  material: SkeuMaterial.leather,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -55,10 +57,45 @@ class BackupScreen extends ConsumerWidget {
                   'Verify',
                   'Done',
                 ])
-                  ListTile(
-                    leading: const Icon(Icons.check_circle_outline_rounded),
-                    title: Text(step),
-                    subtitle: const Text('Background queue stage'),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SkeuSurface(
+                      material: SkeuMaterial.graphite,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline_rounded,
+                            color: SkeuPalette.titanium,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  step,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                const Text(
+                                  'Background queue stage',
+                                  style: TextStyle(
+                                    color: SkeuPalette.muted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
               ],
             );
@@ -103,15 +140,26 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PremiumSurface(
+      material: SkeuMaterial.aluminum,
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 6),
           Text(value,
-              style:
-                  const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+              style: const TextStyle(
+                color: Color(0xFF080808),
+                fontSize: 21,
+                fontWeight: FontWeight.w900,
+              )),
         ],
       ),
     );

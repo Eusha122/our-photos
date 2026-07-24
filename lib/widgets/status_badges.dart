@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/media_status.dart';
+import 'skeuomorphic.dart';
 
 class StatusBadges extends StatelessWidget {
   const StatusBadges({required this.statuses, super.key});
@@ -16,15 +17,26 @@ class StatusBadges extends StatelessWidget {
         for (final status in visible)
           Tooltip(
             message: status.label,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.48),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Icon(_icon(status), size: 11, color: Colors.white),
+            child: SizedBox.square(
+              dimension: 19,
+              child: SkeuContainer(
+                material: SkeuMaterial.aluminum,
+                radius: 10,
+                lift: 0.22,
+                child: Center(
+                  child: Icon(
+                    _icon(status),
+                    size: 11,
+                    color: const Color(0xFF101010),
+                    shadows: [
+                      Shadow(
+                        color: Colors.white.withValues(alpha: 0.34),
+                        offset: const Offset(-0.4, -0.4),
+                        blurRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

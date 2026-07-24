@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
 import '../../models/media_status.dart';
-import '../../widgets/liquid_glass.dart';
+import '../../widgets/skeuomorphic.dart';
 import '../../widgets/status_badges.dart';
 import 'asset_thumbnail.dart';
 import 'gallery_index_controller.dart';
@@ -42,20 +42,10 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
                 ),
               ),
             ),
-            GlassSelector(
-              count: 3,
+            SkeuSegmentedControl(
+              labels: const ['Photos', 'Timeline', 'Albums'],
               selected: _segment,
               onSelected: (value) => setState(() => _segment = value),
-              height: 40,
-              borderRadius: 22,
-              capsuleRadius: 16,
-              outerPadding: const EdgeInsets.all(4),
-              capsuleInset: 2,
-              blur: 22,
-              itemBuilder: (context, i, selected) => _SegmentLabel(
-                label: const ['Photos', 'Timeline', 'Albums'][i],
-                selected: selected,
-              ),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -257,15 +247,13 @@ class _GalleryStatusView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                shape: BoxShape.circle,
+            SizedBox.square(
+              dimension: 96,
+              child: SkeuContainer(
+                material: SkeuMaterial.aluminum,
+                radius: 48,
+                child: Icon(icon, size: 44, color: const Color(0xFF121212)),
               ),
-              child: Icon(icon, size: 44, color: theme.colorScheme.primary),
             ),
             const SizedBox(height: 20),
             Text(
@@ -286,57 +274,41 @@ class _GalleryStatusView extends StatelessWidget {
               const SizedBox(height: 22),
               SizedBox(
                 width: 180,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
+                child: SkeuSurface(
+                  material: SkeuMaterial.graphite,
+                  radius: 8,
+                  padding: const EdgeInsets.all(4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: (progress ?? 0.18).clamp(0.08, 1),
+                      child: const SizedBox(
+                        height: 7,
+                        child: SkeuContainer(
+                          material: SkeuMaterial.aluminum,
+                          radius: 5,
+                          child: SizedBox.expand(),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: onAction,
-                child: Text(actionLabel!),
-              ),
+              SkeuButton(label: actionLabel!, onTap: onAction),
             ],
             if (secondaryLabel != null && onSecondary != null) ...[
               const SizedBox(height: 8),
-              TextButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel!),
+              SkeuButton(
+                label: secondaryLabel!,
+                onTap: onSecondary,
+                compact: true,
               ),
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// One label inside the glass segmented control.
-class _SegmentLabel extends StatelessWidget {
-  const _SegmentLabel({required this.label, required this.selected});
-
-  final String label;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: AnimatedDefaultTextStyle(
-        duration: const Duration(milliseconds: 220),
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: selected
-              ? (dark ? Colors.white : const Color(0xFF171412))
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
-        ),
-        child: Text(label),
       ),
     );
   }
@@ -361,59 +333,79 @@ class _AssetTile extends StatelessWidget {
       ),
       child: _Pressable(
         onTap: onOpen,
-        child: Hero(
-          tag: 'asset:${asset.id}',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    HSLColor.fromAHSL(1, hue.toDouble(), 0.45, 0.42).toColor(),
-                    HSLColor.fromAHSL(
-                      1,
-                      ((hue + 45) % 360).toDouble(),
-                      0.52,
-                      0.62,
-                    ).toColor(),
-                  ],
-                ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image(
-                    image: AssetThumbnailProvider(asset.platformId),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    frameBuilder:
-                        (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded) return child;
-                      return AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeOut,
-                        child: child,
-                      );
-                    },
-                    errorBuilder: (context, error, stack) =>
-                        const SizedBox.shrink(),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: SkeuShadow.contact(),
+          ),
+          child: Hero(
+            tag: 'asset:${asset.id}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      HSLColor.fromAHSL(1, hue.toDouble(), 0.2, 0.26).toColor(),
+                      HSLColor.fromAHSL(
+                        1,
+                        ((hue + 45) % 360).toDouble(),
+                        0.26,
+                        0.46,
+                      ).toColor(),
+                    ],
                   ),
-                  if (asset.kind == MediaKind.video)
-                    const Center(
-                      child: Icon(
-                        Icons.play_circle_fill_rounded,
-                        color: Colors.white,
-                        size: 34,
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image(
+                      image: AssetThumbnailProvider(asset.platformId),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      frameBuilder:
+                          (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOut,
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (context, error, stack) =>
+                          const SizedBox.shrink(),
+                    ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.center,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.10),
+                            Colors.transparent,
+                          ],
+                        ),
                       ),
                     ),
-                  Positioned(
-                    left: 7,
-                    right: 7,
-                    bottom: 7,
-                    child: StatusBadges(statuses: asset.statuses),
-                  ),
-                ],
+                    if (asset.kind == MediaKind.video)
+                      const Center(
+                        child: Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
+                      ),
+                    Positioned(
+                      left: 7,
+                      right: 7,
+                      bottom: 7,
+                      child: StatusBadges(statuses: asset.statuses),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -473,16 +465,39 @@ class _TimelineList extends StatelessWidget {
     return ListView.separated(
       key: const ValueKey('timeline'),
       physics: const BouncingScrollPhysics(),
-      itemBuilder: (context, index) => ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          effective[index].toString(),
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+      itemBuilder: (context, index) => SkeuPressAnimation(
+        onTap: () {},
+        child: SkeuSurface(
+          material: SkeuMaterial.leather,
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      effective[index].toString(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: SkeuPalette.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tap to see memories, places, and best shots',
+                      style: TextStyle(color: SkeuPalette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: SkeuPalette.muted),
+            ],
+          ),
         ),
-        subtitle: const Text('Tap to see memories, places, and best shots'),
-        trailing: const Icon(Icons.chevron_right_rounded),
       ),
-      separatorBuilder: (_, __) => const Divider(height: 24),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemCount: effective.length,
     );
   }
@@ -510,14 +525,17 @@ class _AlbumList extends StatelessWidget {
         mainAxisSpacing: 12,
       ),
       itemCount: effective.length,
-      itemBuilder: (context, index) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Align(
-            alignment: Alignment.bottomLeft,
-            child: Text(
-              effective[index].toString(),
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+      itemBuilder: (context, index) => SkeuSurface(
+        material: SkeuMaterial.leather,
+        padding: const EdgeInsets.all(16),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Text(
+            effective[index].toString(),
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+              color: SkeuPalette.ink,
             ),
           ),
         ),

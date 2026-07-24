@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../widgets/premium_surface.dart';
+import '../../widgets/skeuomorphic.dart';
 
 class SharedScreen extends ConsumerStatefulWidget {
   const SharedScreen({super.key});
@@ -35,6 +36,7 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
             ),
             const SizedBox(height: 16),
             PremiumSurface(
+              material: SkeuMaterial.leather,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -46,8 +48,10 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                   const Text(
                       'Create an invite code. Your partner enters it to join a two-person shared album.'),
                   const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: () async {
+                  SkeuButton(
+                    icon: Icons.add_link_rounded,
+                    label: 'Create Code',
+                    onTap: () async {
                       final messenger = ScaffoldMessenger.of(context);
                       try {
                         final invite =
@@ -67,14 +71,13 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.add_link_rounded),
-                    label: const Text('Create Code'),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
             PremiumSurface(
+              material: SkeuMaterial.leather,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -83,16 +86,31 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _codeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Invite code',
-                      prefixIcon: Icon(Icons.key_rounded),
+                  SkeuSurface(
+                    material: SkeuMaterial.graphite,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TextField(
+                      controller: _codeController,
+                      style: const TextStyle(
+                        color: SkeuPalette.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        labelText: 'Invite code',
+                        labelStyle: TextStyle(color: SkeuPalette.muted),
+                        prefixIcon: Icon(
+                          Icons.key_rounded,
+                          color: SkeuPalette.titanium,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: () async {
+                  SkeuButton(
+                    icon: Icons.login_rounded,
+                    label: 'Join',
+                    onTap: () async {
                       final messenger = ScaffoldMessenger.of(context);
                       try {
                         final invite = await ref
@@ -109,8 +127,6 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.login_rounded),
-                    label: const Text('Join'),
                   ),
                 ],
               ),
@@ -125,10 +141,44 @@ class _SharedScreenState extends ConsumerState<SharedScreen> {
               'Shared timeline',
               'Shared favorites',
             ])
-              ListTile(
-                leading: const Icon(Icons.favorite_rounded),
-                title: Text(label),
-                subtitle: const Text('Synced through partner album manifests'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SkeuSurface(
+                  material: SkeuMaterial.graphite,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.favorite_rounded,
+                        color: SkeuPalette.titanium,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Synced through partner album manifests',
+                              style: TextStyle(
+                                color: SkeuPalette.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),

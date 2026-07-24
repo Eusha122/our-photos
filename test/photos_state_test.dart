@@ -7,7 +7,6 @@ import 'package:memoryvault/features/photos/photos_screen.dart';
 import 'package:memoryvault/models/gallery_asset.dart';
 import 'package:memoryvault/repositories/gallery_repository.dart';
 import 'package:memoryvault/services/media_indexer_service.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 /// Repository stub — PhotosScreen reads the provider but never calls a method
 /// on it while the Photos segment (index 0) is showing.

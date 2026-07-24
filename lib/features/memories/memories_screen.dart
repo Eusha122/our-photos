@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/premium_surface.dart';
+import '../../widgets/skeuomorphic.dart';
 
 class MemoriesScreen extends StatelessWidget {
   const MemoriesScreen({super.key});
@@ -36,6 +37,7 @@ class MemoriesScreen extends StatelessWidget {
             }
             final title = sections[index - 1];
             return PremiumSurface(
+              material: SkeuMaterial.leather,
               padding: const EdgeInsets.all(18),
               child: SizedBox(
                 height: 132,

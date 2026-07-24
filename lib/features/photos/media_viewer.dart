@@ -9,7 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../models/gallery_asset.dart';
 import '../../models/media_status.dart';
-import '../../widgets/liquid_glass.dart';
+import '../../widgets/skeuomorphic.dart';
 import 'asset_thumbnail.dart';
 
 /// Opens the full-screen, swipeable gallery viewer with a fade + hero
@@ -154,44 +154,55 @@ class _TopBar extends StatelessWidget {
           padding: EdgeInsets.only(top: top + 10, left: 14, right: 14),
           child: Align(
             alignment: Alignment.topCenter,
-            child: LiquidGlass(
-              borderRadius: 24,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: onClose,
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    color: Colors.white,
-                    iconSize: 20,
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+            child: SkeuContainer(
+              material: SkeuMaterial.graphite,
+              radius: 24,
+              lift: 0.85,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  children: [
+                    SkeuIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: onClose,
+                      size: 38,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: SkeuPalette.ink,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0xCC000000),
+                                  offset: Offset(0, 1),
+                                  blurRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              color: SkeuPalette.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                ),
               ),
             ),
           ),
@@ -317,41 +328,47 @@ class _VideoPageState extends State<_VideoPage> {
               child: VideoPlayer(controller),
             ),
           ),
-          // Center play/pause affordance.
+          // Center play/pause affordance — a raised aluminum dial, like a
+          // camera shutter button, with an engraved play glyph.
           ValueListenableBuilder<VideoPlayerValue>(
             valueListenable: controller,
             builder: (context, value, _) => AnimatedOpacity(
               opacity: value.isPlaying ? 0 : 1,
               duration: const Duration(milliseconds: 200),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.42),
-                    shape: BoxShape.circle,
+              child: const Center(
+                child: SizedBox.square(
+                  dimension: 72,
+                  child: SkeuContainer(
+                    material: SkeuMaterial.aluminum,
+                    radius: 36,
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: Color(0xFF111111),
+                      size: 38,
+                    ),
                   ),
-                  child: const Icon(Icons.play_arrow_rounded,
-                      color: Colors.white, size: 44),
                 ),
               ),
             ),
           ),
-          // Glass scrubber.
+          // Scrubber — an inset aluminum control strip.
           Positioned(
             left: 16,
             right: 16,
             bottom: MediaQuery.paddingOf(context).bottom + 20,
-            child: LiquidGlass(
-              borderRadius: 18,
+            child: SkeuSurface(
+              material: SkeuMaterial.graphite,
+              radius: 18,
+              lift: 0.7,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: VideoProgressIndicator(
                 controller,
                 allowScrubbing: true,
                 padding: EdgeInsets.zero,
-                colors: VideoProgressColors(
-                  playedColor: Colors.white,
-                  bufferedColor: Colors.white.withValues(alpha: 0.35),
-                  backgroundColor: Colors.white.withValues(alpha: 0.18),
+                colors: const VideoProgressColors(
+                  playedColor: SkeuPalette.titanium,
+                  bufferedColor: SkeuPalette.aluminumDark,
+                  backgroundColor: Color(0x33000000),
                 ),
               ),
             ),
