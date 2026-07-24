@@ -83,6 +83,84 @@ class GalleryRepository {
         .get();
   }
 
+  /// The real photos inside a single album, newest first — used both for the
+  /// album card's cover thumbnail and for opening the full album view.
+  Future<List<domain.GalleryAsset>> loadAlbumAssets(String albumId) async {
+    final query = _db.select(_db.mediaAssets).join([
+      innerJoin(
+        _db.albumAssets,
+        _db.albumAssets.assetId.equalsExp(_db.mediaAssets.id),
+      ),
+    ])
+      ..where(_db.albumAssets.albumId.equals(albumId))
+      ..where(_db.mediaAssets.isDeleted.equals(false))
+      ..orderBy([OrderingTerm.desc(_db.mediaAssets.createdAt)]);
+    final rows = await query.get();
+    return rows.map((row) => _mapAsset(row.readTable(_db.mediaAssets))).toList();
+  }
+
+  /// Curated groupings of real photos — replaces what used to be ten
+  /// hardcoded placeholder titles with no photos behind them. Only groups
+  /// that actually have at least one matching asset are returned.
+  Future<List<domain.TimelineBucket>> loadMemories() async {
+    final assets =
+        (await _db.latestAssets(limit: 5000)).map(_mapAsset).toList();
+    if (assets.isEmpty) return const [];
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastMonth = DateTime(now.year, now.month - 1);
+
+    domain.TimelineBucket? bucket(
+      String title,
+      Iterable<domain.GalleryAsset> items,
+    ) {
+      final list = items.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (list.isEmpty) return null;
+      return domain.TimelineBucket(
+        title: title,
+        assets: list,
+        start: list.last.createdAt,
+        end: list.first.createdAt,
+      );
+    }
+
+    int daysBeforeToday(DateTime dt) =>
+        today.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+
+    final groups = <domain.TimelineBucket>[
+      bucket(
+        'On This Day',
+        assets.where(
+          (a) =>
+              a.createdAt.year != now.year &&
+              a.createdAt.month == now.month &&
+              a.createdAt.day == now.day,
+        ),
+      ),
+      bucket(
+        'This Week',
+        assets.where((a) {
+          final days = daysBeforeToday(a.createdAt);
+          return days >= 0 && days <= 7;
+        }),
+      ),
+      bucket(
+        'Last Month',
+        assets.where(
+          (a) =>
+              a.createdAt.year == lastMonth.year &&
+              a.createdAt.month == lastMonth.month,
+        ),
+      ),
+      bucket('Favorites', assets.where((a) => a.isFavorite)),
+      bucket('Recently Added', assets.take(30)),
+    ].whereType<domain.TimelineBucket>().toList();
+
+    return groups;
+  }
+
   Future<List<PlaceCluster>> loadPlaces() {
     return (_db.select(_db.placeClusters)
           ..orderBy([(place) => OrderingTerm.desc(place.assetCount)]))

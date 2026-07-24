@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/database/app_database.dart' show Album;
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
-import '../../models/media_status.dart';
+import '../../models/timeline_bucket.dart' as domain;
 import '../../widgets/skeuomorphic.dart';
-import '../../widgets/status_badges.dart';
+import 'asset_group_screen.dart';
 import 'asset_thumbnail.dart';
+import 'asset_tile.dart';
 import 'gallery_index_controller.dart';
 import 'media_viewer.dart';
 
@@ -279,7 +281,7 @@ class _PhotosGrid extends ConsumerWidget {
               mainAxisSpacing: 8,
             ),
             itemCount: assets.length,
-            itemBuilder: (context, index) => _AssetTile(
+            itemBuilder: (context, index) => AssetTile(
               asset: assets[index],
               onOpen: () => Navigator.of(context).push(
                 mediaViewerRoute(assets: assets, initialIndex: index),
@@ -475,143 +477,13 @@ class _GalleryStatusView extends StatelessWidget {
   }
 }
 
-class _AssetTile extends StatelessWidget {
-  const _AssetTile({required this.asset, required this.onOpen});
-
-  final GalleryAsset asset;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final hue = asset.id.hashCode.remainder(360).abs();
-    // No per-tile entrance animation: GridView.builder creates a fresh tile
-    // widget every time one scrolls into view, so an AnimationController per
-    // tile means dozens spin up during a fast fling — costly for smooth
-    // scroll. The image's own load-fade (frameBuilder below) is enough, and
-    // it's a no-op after the first decode thanks to the image cache.
-    return _Pressable(
-      onTap: onOpen,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: SkeuShadow.contact(),
-        ),
-        child: Hero(
-          tag: 'asset:${asset.id}',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    HSLColor.fromAHSL(1, hue.toDouble(), 0.2, 0.26).toColor(),
-                    HSLColor.fromAHSL(
-                      1,
-                      ((hue + 45) % 360).toDouble(),
-                      0.26,
-                      0.46,
-                    ).toColor(),
-                  ],
-                ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image(
-                    image: AssetThumbnailProvider(asset.platformId),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    frameBuilder:
-                        (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded) return child;
-                      return AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeOut,
-                        child: child,
-                      );
-                    },
-                    errorBuilder: (context, error, stack) =>
-                        const SizedBox.shrink(),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.center,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.10),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (asset.kind == MediaKind.video)
-                    const Center(
-                      child: Icon(
-                        Icons.play_circle_fill_rounded,
-                        color: Colors.white,
-                        size: 34,
-                      ),
-                    ),
-                  Positioned(
-                    left: 7,
-                    right: 7,
-                    bottom: 7,
-                    child: StatusBadges(statuses: asset.statuses),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Adds a subtle press-in scale for a tactile, premium feel.
-class _Pressable extends StatefulWidget {
-  const _Pressable({required this.child, required this.onTap});
-
-  final Widget child;
-  final VoidCallback onTap;
-
-  @override
-  State<_Pressable> createState() => _PressableState();
-}
-
-class _PressableState extends State<_Pressable> {
-  bool _down = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _down = true),
-      onTapUp: (_) {
-        setState(() => _down = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _down = false),
-      child: AnimatedScale(
-        scale: _down ? 0.95 : 1,
-        duration: const Duration(milliseconds: 130),
-        curve: Curves.easeOut,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
 class _TimelineList extends StatelessWidget {
   const _TimelineList({
     required this.buckets,
     required this.topPadding,
   });
 
-  final List<dynamic> buckets;
+  final List<domain.TimelineBucket> buckets;
   final double topPadding;
 
   @override
@@ -623,45 +495,105 @@ class _TimelineList extends StatelessWidget {
         topPadding: topPadding,
       );
     }
-    final effective = buckets.map((bucket) => bucket.title).toList();
     return ListView.separated(
       key: const ValueKey('timeline'),
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockClearance),
-      itemBuilder: (context, index) => SkeuPressAnimation(
-        onTap: () {},
-        child: SkeuSurface(
-          material: SkeuMaterial.leather,
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      effective[index].toString(),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: SkeuPalette.ink,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Tap to see memories, places, and best shots',
-                      style: TextStyle(color: SkeuPalette.muted, fontSize: 12),
-                    ),
-                  ],
-                ),
+      itemBuilder: (context, index) {
+        final bucket = buckets[index];
+        return _GroupRow(
+          title: bucket.title,
+          subtitle: '${bucket.assets.length} '
+              '${bucket.assets.length == 1 ? 'item' : 'items'}',
+          coverAssetId:
+              bucket.assets.isEmpty ? null : bucket.assets.first.platformId,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => AssetGroupScreen(
+                title: bucket.title,
+                assets: bucket.assets,
               ),
-              const Icon(Icons.chevron_right_rounded, color: SkeuPalette.muted),
-            ],
+            ),
           ),
+        );
+      },
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemCount: buckets.length,
+    );
+  }
+}
+
+/// A tappable leather row with a real cover thumbnail — used by both the
+/// Timeline list and (in a 2-column grid) the Albums list, so a group with
+/// no photos behind it can no longer look identical to one that does.
+class _GroupRow extends StatelessWidget {
+  const _GroupRow({
+    required this.title,
+    required this.subtitle,
+    required this.coverAssetId,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? coverAssetId;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: SkeuSurface(
+        material: SkeuMaterial.leather,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: coverAssetId == null
+                    ? const ColoredBox(color: SkeuPalette.graphiteDeep)
+                    : Image(
+                        image: AssetThumbnailProvider(coverAssetId!),
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        errorBuilder: (context, error, stack) =>
+                            const ColoredBox(color: SkeuPalette.graphiteDeep),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: SkeuPalette.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: SkeuPalette.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: SkeuPalette.muted),
+          ],
         ),
       ),
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemCount: effective.length,
     );
   }
 }
@@ -672,7 +604,7 @@ class _AlbumList extends StatelessWidget {
     required this.topPadding,
   });
 
-  final List<dynamic> albums;
+  final List<Album> albums;
   final double topPadding;
 
   @override
@@ -684,7 +616,6 @@ class _AlbumList extends StatelessWidget {
         topPadding: topPadding,
       );
     }
-    final effective = albums.map((album) => album.title).toList();
     return GridView.builder(
       key: const ValueKey('albums'),
       padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockClearance),
@@ -693,22 +624,110 @@ class _AlbumList extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
-      itemCount: effective.length,
-      itemBuilder: (context, index) => SkeuSurface(
-        material: SkeuMaterial.leather,
-        padding: const EdgeInsets.all(16),
-        child: Align(
-          alignment: Alignment.bottomLeft,
-          child: Text(
-            effective[index].toString(),
-            style: const TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w900,
-              color: SkeuPalette.ink,
+      itemCount: albums.length,
+      itemBuilder: (context, index) => _AlbumCard(album: albums[index]),
+    );
+  }
+}
+
+/// An album card with its real cover photo (the album's most recent asset)
+/// and item count, fetched from the [AlbumAssets] join. Tapping opens every
+/// photo actually inside that album.
+class _AlbumCard extends ConsumerWidget {
+  const _AlbumCard({required this.album});
+
+  final Album album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<List<GalleryAsset>>(
+      future: ref.watch(galleryRepositoryProvider).loadAlbumAssets(album.id),
+      builder: (context, snapshot) {
+        final assets = snapshot.data ?? const <GalleryAsset>[];
+        return Pressable(
+          onTap: assets.isEmpty
+              ? () {}
+              : () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AssetGroupScreen(
+                        title: album.title,
+                        assets: assets,
+                      ),
+                    ),
+                  ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: SkeuShadow.contact(),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: DecoratedBox(
+                decoration:
+                    const BoxDecoration(color: SkeuPalette.graphiteDeep),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (assets.isNotEmpty)
+                      Image(
+                        image: AssetThumbnailProvider(assets.first.platformId),
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        errorBuilder: (context, error, stack) =>
+                            const SizedBox.shrink(),
+                      ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.78),
+                          ],
+                          stops: const [0.4, 1],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 14,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            album.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            assets.isEmpty
+                                ? 'Empty'
+                                : '${assets.length} '
+                                    '${assets.length == 1 ? 'item' : 'items'}',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.78),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

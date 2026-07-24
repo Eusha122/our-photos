@@ -137,8 +137,11 @@ class MediaIndexerService {
     };
   }
 
-  /// Upserts one album row per on-device folder so the Albums tab reflects the
-  /// real device layout. Cheap: there are only a handful of folders.
+  /// Upserts one album row per on-device folder so the Albums tab reflects
+  /// the real device layout, AND links each folder's assets into
+  /// [AlbumAssets] — without this join table populated, album cards have no
+  /// photos to show a cover thumbnail from or to open when tapped, even
+  /// though the album's *name* is real.
   Future<void> _indexAlbums() async {
     final folders = await PhotoManager.getAssetPathList(
       type: RequestType.common,
@@ -147,28 +150,56 @@ class MediaIndexerService {
     if (folders.isEmpty) return;
 
     final now = DateTime.now();
-    await _db.batch((batch) {
-      for (final folder in folders) {
-        batch.insert(
-          _db.albums,
-          AlbumsCompanion.insert(
-            id: 'folder:${folder.id}',
-            title: _albumTitle(folder.name),
-            sourceFolder: Value(folder.name),
-            isAuto: const Value(true),
-            updatedAt: now,
-          ),
-          onConflict: DoUpdate(
-            (_) => AlbumsCompanion(
-              title: Value(_albumTitle(folder.name)),
+    for (final folder in folders) {
+      final albumId = 'folder:${folder.id}';
+      await _db.into(_db.albums).insertOnConflictUpdate(
+            AlbumsCompanion.insert(
+              id: albumId,
+              title: _albumTitle(folder.name),
               sourceFolder: Value(folder.name),
-              updatedAt: Value(now),
+              isAuto: const Value(true),
+              updatedAt: now,
             ),
-            target: [_db.albums.id],
-          ),
-        );
+          );
+
+      String? coverAssetId;
+      DateTime? coverCreatedAt;
+      final count = await folder.assetCountAsync;
+      final pageCount = (count / _pageSize).ceil();
+
+      for (var page = 0; page < pageCount; page++) {
+        final assets =
+            await folder.getAssetListPaged(page: page, size: _pageSize);
+        if (assets.isEmpty) break;
+
+        await _db.batch((batch) {
+          for (final asset in assets) {
+            batch.insert(
+              _db.albumAssets,
+              AlbumAssetsCompanion.insert(
+                albumId: albumId,
+                assetId: asset.id,
+                addedAt: now,
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+          }
+        });
+
+        for (final asset in assets) {
+          if (coverCreatedAt == null ||
+              asset.createDateTime.isAfter(coverCreatedAt)) {
+            coverAssetId = asset.id;
+            coverCreatedAt = asset.createDateTime;
+          }
+        }
       }
-    });
+
+      if (coverAssetId != null) {
+        await (_db.update(_db.albums)..where((row) => row.id.equals(albumId)))
+            .write(AlbumsCompanion(coverAssetId: Value(coverAssetId)));
+      }
+    }
   }
 
   String _albumTitle(String raw) {
