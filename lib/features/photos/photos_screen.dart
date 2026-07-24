@@ -239,6 +239,7 @@ class _GalleryStatusView extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
+    required this.topPadding,
     this.actionLabel,
     this.onAction,
     this.secondaryLabel,
@@ -248,7 +249,11 @@ class _GalleryStatusView extends StatelessWidget {
   });
 
   /// Builds the right state widget from the controller's [GalleryIndexState].
-  factory _GalleryStatusView.forIndex(GalleryIndexState index, WidgetRef ref) {
+  factory _GalleryStatusView.forIndex(
+    GalleryIndexState index,
+    WidgetRef ref,
+    double topPadding,
+  ) {
     final controller = ref.read(galleryIndexControllerProvider.notifier);
     switch (index.status) {
       case GalleryStatus.permissionDenied:
@@ -259,6 +264,7 @@ class _GalleryStatusView extends StatelessWidget {
               'your library.',
           actionLabel: 'Grant access',
           onAction: controller.retry,
+          topPadding: topPadding,
         );
       case GalleryStatus.permissionPermanentlyDenied:
         return _GalleryStatusView(
@@ -271,6 +277,7 @@ class _GalleryStatusView extends StatelessWidget {
           onAction: controller.openSettings,
           secondaryLabel: 'Try again',
           onSecondary: controller.retry,
+          topPadding: topPadding,
         );
       case GalleryStatus.error:
         return _GalleryStatusView(
@@ -279,6 +286,7 @@ class _GalleryStatusView extends StatelessWidget {
           message: index.errorMessage ?? 'An unexpected error occurred.',
           actionLabel: 'Retry',
           onAction: controller.retry,
+          topPadding: topPadding,
         );
       case GalleryStatus.checkingPermission:
       case GalleryStatus.scanning:
@@ -293,6 +301,7 @@ class _GalleryStatusView extends StatelessWidget {
           showSpinner: true,
           actionLabel: 'Cancel',
           onAction: controller.cancel,
+          topPadding: topPadding,
         );
       case GalleryStatus.ready:
         return _GalleryStatusView(
@@ -301,13 +310,15 @@ class _GalleryStatusView extends StatelessWidget {
           message: 'We didn’t find any photos or videos on this device yet.',
           actionLabel: 'Refresh Library',
           onAction: controller.retry,
+          topPadding: topPadding,
         );
       case GalleryStatus.initial:
-        return const _GalleryStatusView(
+        return _GalleryStatusView(
           icon: Icons.photo_library_outlined,
           title: 'Preparing…',
           message: 'Getting your gallery ready.',
           showSpinner: true,
+          topPadding: topPadding,
         );
     }
   }
@@ -315,6 +326,7 @@ class _GalleryStatusView extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
+  final double topPadding;
   final String? actionLabel;
   final VoidCallback? onAction;
   final String? secondaryLabel;
@@ -325,9 +337,11 @@ class _GalleryStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, bottom: _dockOverlap),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
