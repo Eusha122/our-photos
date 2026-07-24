@@ -25,31 +25,59 @@ const double _headerContentHeight = 140;
 /// How much of the dock's own footprint (74 tall + 18 bottom margin) the
 /// content is allowed to scroll *under*. Deliberately small: the dock should
 /// float directly over the last row of photos, not sit above a bare gutter.
+/// Fine for photo tiles — nothing critical sits at their very bottom edge.
 const double _dockOverlap = 24;
 
-class _PhotosScreenState extends ConsumerState<PhotosScreen> {
+/// Bottom clearance for Timeline/Albums, where — unlike photo tiles — every
+/// row's actual content (a title, an album name) is anchored at its bottom
+/// edge. This fully clears the dock's ~92px footprint (74 tall + 18 margin)
+/// plus a little breathing room, so the last row always scrolls fully clear
+/// of it instead of staying permanently unreadable underneath.
+const double _dockClearance = 112;
+
+class _PhotosScreenState extends ConsumerState<PhotosScreen>
+    with SingleTickerProviderStateMixin {
   int _segment = 0;
   double _tileSize = 112;
-  bool _headerVisible = true;
 
-  // The segmented control lives in the collapsing header (not the bottom
-  // dock, which always stays put) — scrolling down tucks it away for more
-  // viewing room; scrolling up, or reaching the top, brings it back.
+  // 0 = header fully shown, 1 = fully collapsed. During a scroll this tracks
+  // the raw delta 1:1 (jumps, no animation) so the header follows the finger
+  // exactly like a native floating nav bar — a fixed-duration animation
+  // triggered by a direction threshold is what read as "buggy": it snaps
+  // fully open/closed regardless of how far you actually scrolled, and can
+  // fight with the gesture. Only on release does it *animate* to the nearer
+  // edge, which is the one place a native bar actually animates.
+  late final AnimationController _collapse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  );
+
   bool _handleScroll(ScrollNotification notification) {
+    final headerHeight =
+        MediaQuery.paddingOf(context).top + _headerContentHeight;
+    if (headerHeight <= 0) return false;
+
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta;
-      if (delta == null || delta.abs() < 3) return false;
-      final shouldShow = delta < 0;
-      if (shouldShow != _headerVisible) {
-        setState(() => _headerVisible = shouldShow);
-      }
+      if (delta == null || delta == 0) return false;
+      _collapse.value = (_collapse.value + delta / headerHeight).clamp(0, 1);
     } else if (notification is ScrollEndNotification) {
-      final metrics = notification.metrics;
-      if (metrics.pixels <= metrics.minScrollExtent && !_headerVisible) {
-        setState(() => _headerVisible = true);
+      final target = _collapse.value > 0.5 ? 1.0 : 0.0;
+      if (_collapse.value != target) {
+        _collapse.animateTo(
+          target,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+        );
       }
     }
     return false;
+  }
+
+  @override
+  void dispose() {
+    _collapse.dispose();
+    super.dispose();
   }
 
   @override
@@ -101,17 +129,37 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
             left: 0,
             right: 0,
             height: topPadding,
-            child: IgnorePointer(
-              ignoring: !_headerVisible,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                offset: _headerVisible ? Offset.zero : const Offset(0, -1),
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: _headerVisible ? 1 : 0,
-                  child: RepaintBoundary(
-                    child: SafeArea(
+            child: AnimatedBuilder(
+              animation: _collapse,
+              // `child` is the fully static content — a dark scrim (so the
+              // title/segmented control stay legible over colorful photos,
+              // no blur, matching the skeuomorphic material language rather
+              // than glassmorphism) plus the header itself. Wrapping it in
+              // RepaintBoundary lets the engine cache it as one layer and
+              // just re-*position* that layer every scroll frame instead of
+              // re-rastering the gradient/text/segmented-control each tick.
+              child: RepaintBoundary(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              SkeuPalette.backgroundBottom
+                                  .withValues(alpha: 0.96),
+                              SkeuPalette.backgroundBottom
+                                  .withValues(alpha: 0.86),
+                              SkeuPalette.backgroundBottom.withValues(alpha: 0),
+                            ],
+                            stops: const [0, 0.62, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SafeArea(
                       bottom: false,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
@@ -134,14 +182,25 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
                               selected: _segment,
                               onSelected: (value) => setState(() {
                                 _segment = value;
-                                _headerVisible = true;
+                                _collapse.animateTo(
+                                  0,
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutCubic,
+                                );
                               }),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
+              builder: (context, child) => IgnorePointer(
+                ignoring: _collapse.value > 0.5,
+                child: Transform.translate(
+                  offset: Offset(0, -topPadding * _collapse.value),
+                  child: child,
                 ),
               ),
             ),
@@ -568,7 +627,7 @@ class _TimelineList extends StatelessWidget {
     return ListView.separated(
       key: const ValueKey('timeline'),
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockOverlap),
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockClearance),
       itemBuilder: (context, index) => SkeuPressAnimation(
         onTap: () {},
         child: SkeuSurface(
@@ -628,7 +687,7 @@ class _AlbumList extends StatelessWidget {
     final effective = albums.map((album) => album.title).toList();
     return GridView.builder(
       key: const ValueKey('albums'),
-      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockOverlap),
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, _dockClearance),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,

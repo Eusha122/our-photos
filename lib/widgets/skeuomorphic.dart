@@ -125,19 +125,15 @@ class SkeuContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Two RepaintBoundary layers, for two different reasons:
-    //  - The outer one caches this whole surface (gradient + brushed/grain
-    //    texture + inset-shadow blur stroke — the expensive part) as its own
-    //    GPU layer, so it isn't re-rastered just because something ELSE on
-    //    screen repaints (e.g. a sibling's scroll or an ancestor rebuild).
-    //  - The inner one isolates `child` so that ITS OWN animations (a button
-    //    press, the spring-driven selection capsule, an icon size tween)
-    //    stop at that boundary instead of forcing the whole CustomPainter
-    //    above (gradient + texture + MaskFilter.blur — all genuinely
-    //    expensive Skia work) to re-run on every single animation frame.
-    // Without this, every press/spring/tween anywhere in the app was
-    // repainting its enclosing material's full texture+blur each frame —
-    // the actual cause of the app-wide jank.
+    // A single RepaintBoundary caches this whole surface (gradient +
+    // brushed/grain texture + inset-shadow blur stroke — the expensive part)
+    // as its own GPU layer, so it isn't re-rastered just because something
+    // ELSE on screen repaints. (An earlier version also wrapped `child` in
+    // its own *nested* RepaintBoundary to isolate it from the CustomPainter
+    // above — that combination, inside a ClipRRect, inside a ListView/
+    // GridView's own per-item RepaintBoundary, produced items that stopped
+    // rendering entirely while scrolling on this project's Impeller/Vulkan
+    // renderer. One boundary is the safe, still-effective middle ground.)
     return RepaintBoundary(
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -152,7 +148,7 @@ class SkeuContainer extends StatelessWidget {
               radius: radius,
               texture: texture,
             ),
-            child: RepaintBoundary(child: child),
+            child: child,
           ),
         ),
       ),
