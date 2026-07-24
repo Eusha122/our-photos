@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 enum SkeuMaterial {
   graphite,
@@ -344,28 +345,11 @@ class SkeuBottomNavigation extends StatelessWidget {
         height: 74,
         child: Stack(
           children: [
-            AnimatedAlign(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutBack,
-              // Align interpolates the child over (parentWidth - childWidth),
-              // not the full parent width, so the fraction must be rescaled
-              // by (n-1) to land the shrunk capsule exactly under segment i.
-              alignment: Alignment(
-                items.length > 1 ? (2 * selected / (items.length - 1)) - 1 : 0,
-                0,
-              ),
-              child: FractionallySizedBox(
-                widthFactor: 1 / items.length,
-                child: const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SkeuContainer(
-                    material: SkeuMaterial.graphite,
-                    radius: 26,
-                    lift: 0.35,
-                    child: SizedBox.expand(),
-                  ),
-                ),
-              ),
+            _SkeuSpringCapsule(
+              count: items.length,
+              selected: selected,
+              padding: const EdgeInsets.all(8),
+              radius: 26,
             ),
             Row(
               children: [
@@ -384,6 +368,99 @@ class SkeuBottomNavigation extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The dark "pressed-in" capsule shared by [SkeuBottomNavigation] and
+/// [SkeuSegmentedControl]. Its position is driven by a critically-damped
+/// spring rather than a curve, for two reasons:
+///
+///  - An [AnimatedAlign] + [Curves.easeOutBack] previously overshot its
+///    target on every move. For the first/last slot that overshoot pushed
+///    the alignment past -1/+1 — the container clips at its rounded border,
+///    so the capsule visibly sheared off past the frame edge.
+///  - A real spring settles smoothly without that overshoot, which also
+///    reads as more natural, physical motion ("moves like normal").
+class _SkeuSpringCapsule extends StatefulWidget {
+  const _SkeuSpringCapsule({
+    required this.count,
+    required this.selected,
+    required this.padding,
+    required this.radius,
+    this.lift = 0.35,
+  });
+
+  final int count;
+  final int selected;
+  final EdgeInsets padding;
+  final double radius;
+  final double lift;
+
+  @override
+  State<_SkeuSpringCapsule> createState() => _SkeuSpringCapsuleState();
+}
+
+class _SkeuSpringCapsuleState extends State<_SkeuSpringCapsule>
+    with SingleTickerProviderStateMixin {
+  // Critically damped (damping = 2*sqrt(mass*stiffness)): the fastest
+  // response with zero overshoot, so it can never exceed the track bounds.
+  static const _spring = SpringDescription(
+    mass: 1,
+    stiffness: 500,
+    damping: 44.7,
+  );
+
+  late final AnimationController _controller = AnimationController.unbounded(
+    vsync: this,
+    value: widget.selected.toDouble(),
+  );
+
+  @override
+  void didUpdateWidget(_SkeuSpringCapsule old) {
+    super.didUpdateWidget(old);
+    if (old.selected != widget.selected) {
+      _controller.animateWith(
+        SpringSimulation(
+          _spring,
+          _controller.value,
+          widget.selected.toDouble(),
+          _controller.velocity,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.count;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final pos = _controller.value.clamp(0.0, (n - 1).toDouble());
+        final x = n > 1 ? (2 * pos / (n - 1)) - 1 : 0.0;
+        return Align(
+          alignment: Alignment(x, 0),
+          child: FractionallySizedBox(
+            widthFactor: 1 / n,
+            child: Padding(
+              padding: widget.padding,
+              child: SkeuContainer(
+                material: SkeuMaterial.graphite,
+                radius: widget.radius,
+                lift: widget.lift,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -422,28 +499,12 @@ class SkeuSegmentedControl extends StatelessWidget {
         height: 46,
         child: Stack(
           children: [
-            AnimatedAlign(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutBack,
-              // Same rescaling as SkeuBottomNavigation — see comment there.
-              alignment: Alignment(
-                labels.length > 1
-                    ? (2 * selected / (labels.length - 1)) - 1
-                    : 0,
-                0,
-              ),
-              child: FractionallySizedBox(
-                widthFactor: 1 / labels.length,
-                child: const Padding(
-                  padding: EdgeInsets.all(5),
-                  child: SkeuContainer(
-                    material: SkeuMaterial.graphite,
-                    radius: 16,
-                    lift: 0.45,
-                    child: SizedBox.expand(),
-                  ),
-                ),
-              ),
+            _SkeuSpringCapsule(
+              count: labels.length,
+              selected: selected,
+              padding: const EdgeInsets.all(5),
+              radius: 16,
+              lift: 0.45,
             ),
             Row(
               children: [

@@ -128,6 +128,10 @@ class _PhotosGrid extends ConsumerWidget {
           return GridView.builder(
             key: const ValueKey('photos-grid'),
             physics: const BouncingScrollPhysics(),
+            // Pre-builds/decodes items further outside the viewport so fast
+            // flings don't reveal blank tiles — smoother perceived scroll.
+            // ignore: deprecated_member_use
+            cacheExtent: 900,
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: tileSize,
               crossAxisSpacing: 8,
@@ -323,89 +327,85 @@ class _AssetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hue = asset.id.hashCode.remainder(360).abs();
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) => Opacity(
-        opacity: t.clamp(0, 1),
-        child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
-      ),
-      child: _Pressable(
-        onTap: onOpen,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
+    // No per-tile entrance animation: GridView.builder creates a fresh tile
+    // widget every time one scrolls into view, so an AnimationController per
+    // tile means dozens spin up during a fast fling — costly for smooth
+    // scroll. The image's own load-fade (frameBuilder below) is enough, and
+    // it's a no-op after the first decode thanks to the image cache.
+    return _Pressable(
+      onTap: onOpen,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: SkeuShadow.contact(),
+        ),
+        child: Hero(
+          tag: 'asset:${asset.id}',
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
-            boxShadow: SkeuShadow.contact(),
-          ),
-          child: Hero(
-            tag: 'asset:${asset.id}',
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      HSLColor.fromAHSL(1, hue.toDouble(), 0.2, 0.26).toColor(),
-                      HSLColor.fromAHSL(
-                        1,
-                        ((hue + 45) % 360).toDouble(),
-                        0.26,
-                        0.46,
-                      ).toColor(),
-                    ],
-                  ),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image(
-                      image: AssetThumbnailProvider(asset.platformId),
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      frameBuilder:
-                          (context, child, frame, wasSynchronouslyLoaded) {
-                        if (wasSynchronouslyLoaded) return child;
-                        return AnimatedOpacity(
-                          opacity: frame == null ? 0 : 1,
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOut,
-                          child: child,
-                        );
-                      },
-                      errorBuilder: (context, error, stack) =>
-                          const SizedBox.shrink(),
-                    ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.center,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.10),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (asset.kind == MediaKind.video)
-                      const Center(
-                        child: Icon(
-                          Icons.play_circle_fill_rounded,
-                          color: Colors.white,
-                          size: 34,
-                        ),
-                      ),
-                    Positioned(
-                      left: 7,
-                      right: 7,
-                      bottom: 7,
-                      child: StatusBadges(statuses: asset.statuses),
-                    ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    HSLColor.fromAHSL(1, hue.toDouble(), 0.2, 0.26).toColor(),
+                    HSLColor.fromAHSL(
+                      1,
+                      ((hue + 45) % 360).toDouble(),
+                      0.26,
+                      0.46,
+                    ).toColor(),
                   ],
                 ),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image(
+                    image: AssetThumbnailProvider(asset.platformId),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    errorBuilder: (context, error, stack) =>
+                        const SizedBox.shrink(),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.center,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.10),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (asset.kind == MediaKind.video)
+                    const Center(
+                      child: Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                  Positioned(
+                    left: 7,
+                    right: 7,
+                    bottom: 7,
+                    child: StatusBadges(statuses: asset.statuses),
+                  ),
+                ],
               ),
             ),
           ),

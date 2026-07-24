@@ -18,6 +18,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+  bool _navVisible = true;
 
   final _screens = const [
     PhotosScreen(),
@@ -57,44 +58,82 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     });
   }
 
+  // Scrolling down (content moving up, scrollDelta > 0) hides the dock;
+  // scrolling up brings it back. A small threshold ignores the tiny deltas
+  // from bounce/rubber-banding at the list ends so it doesn't flicker.
+  bool _handleScroll(ScrollNotification notification) {
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta;
+      if (delta == null || delta.abs() < 3) return false;
+      final shouldShow = delta < 0;
+      if (shouldShow != _navVisible) {
+        setState(() => _navVisible = shouldShow);
+      }
+    } else if (notification is ScrollEndNotification) {
+      final metrics = notification.metrics;
+      if (metrics.pixels <= metrics.minScrollExtent && !_navVisible) {
+        setState(() => _navVisible = true);
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(
-            child: SkeuPageBackground(child: SizedBox.expand()),
-          ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: _screens[_index],
-          ),
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 12,
-            right: 16,
-            child: SkeuAvatar(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SettingsScreen(),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _handleScroll,
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: SkeuPageBackground(child: SizedBox.expand()),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _screens[_index],
+            ),
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 12,
+              right: 16,
+              child: SkeuAvatar(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: 18,
-            child: RepaintBoundary(
-              child: SkeuBottomNavigation(
-                items: _navItems,
-                selected: _index,
-                onSelected: (value) => setState(() => _index = value),
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
+              child: RepaintBoundary(
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  offset: _navVisible ? Offset.zero : const Offset(0, 1.6),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _navVisible ? 1 : 0,
+                    child: IgnorePointer(
+                      ignoring: !_navVisible,
+                      child: SkeuBottomNavigation(
+                        items: _navItems,
+                        selected: _index,
+                        onSelected: (value) => setState(() {
+                          _index = value;
+                          _navVisible = true;
+                        }),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
