@@ -655,7 +655,6 @@ class _AlbumList extends StatelessWidget {
 /// Compact centered empty state for the Timeline / Albums segments.
 class _SectionEmpty extends StatelessWidget {
   const _SectionEmpty({
-    super.key,
     required this.icon,
     required this.message,
     required this.topPadding,
