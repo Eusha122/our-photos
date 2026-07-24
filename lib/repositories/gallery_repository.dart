@@ -129,7 +129,7 @@ class GalleryRepository {
     int daysBeforeToday(DateTime dt) =>
         today.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
 
-    final groups = <domain.TimelineBucket>[
+    final groups = <domain.TimelineBucket?>[
       bucket(
         'On This Day',
         assets.where(
