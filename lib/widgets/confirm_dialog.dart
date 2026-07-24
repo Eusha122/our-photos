@@ -89,9 +89,11 @@ class SkeuConfirmDialog extends StatelessWidget {
                 child: SkeuContainer(
                   material: SkeuMaterial.aluminum,
                   radius: 28,
-                  child: Icon(icon, color: accent == SkeuPalette.titanium
-                      ? const Color(0xFF111111)
-                      : accent, size: 26),
+                  child: Icon(icon,
+                      color: accent == SkeuPalette.titanium
+                          ? const Color(0xFF111111)
+                          : accent,
+                      size: 26),
                 ),
               ),
             ),

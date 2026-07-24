@@ -23,7 +23,8 @@ class _FakeIndexer implements MediaIndexerService {
 /// Holds a fixed [GalleryIndexState]; all intent methods are no-ops so the
 /// widget can be rendered for any state without touching platform channels.
 class _FakeController extends GalleryIndexController {
-  _FakeController(GalleryIndexState initial) : super(_FakeIndexer()) {
+  _FakeController(GalleryIndexState initial)
+      : super(_FakeIndexer(), _FakeRepo()) {
     state = initial;
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart' show Album;
@@ -39,19 +40,51 @@ const double _dockOverlap = 24;
 const double _dockClearance = 112;
 
 class _PhotosScreenState extends ConsumerState<PhotosScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   int _segment = 0;
   double _tileSize = 112;
   final Set<String> _selectedIds = {};
   final Set<String> _removingIds = {};
 
+  // A one-shot dim "pulse" over the whole grid — rises then falls back out —
+  // that plays once, at the exact moment a long-press lifts a photo into
+  // selection mode. Together with the haptic tap and the tile's own
+  // pop-scale, this is the iOS long-press-to-select feel: a tactile jolt,
+  // the background recedes, then it's handed back to you to keep selecting.
+  //
+  // This is a flat alpha dim, not a real-time Gaussian blur. A live
+  // BackdropFilter has to re-sample and re-blur everything behind it on
+  // every single animation frame — expensive over a whole grid of photos —
+  // and doing that concurrently with the tile's pop-scale is exactly what
+  // reads as jank/lag. A cheap dim keeps the "background recedes" feeling
+  // genuinely smooth, which is the actual goal.
+  late final AnimationController _selectPulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  late final Animation<double> _selectPulse = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 0.0, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: 30,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 0.0)
+          .chain(CurveTween(curve: Curves.easeInCubic)),
+      weight: 70,
+    ),
+  ]).animate(_selectPulseController);
+
   bool get _selectionMode => _selectedIds.isNotEmpty;
 
   void _enterSelection(String assetId) {
+    HapticFeedback.mediumImpact();
+    _selectPulseController.forward(from: 0);
     setState(() => _selectedIds.add(assetId));
   }
 
   void _toggleSelect(String assetId) {
+    HapticFeedback.selectionClick();
     setState(() {
       if (!_selectedIds.remove(assetId)) _selectedIds.add(assetId);
     });
@@ -126,6 +159,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
   @override
   void dispose() {
     _collapse.dispose();
+    _selectPulseController.dispose();
     super.dispose();
   }
 
@@ -178,6 +212,26 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
               },
             ),
           ),
+          // The long-press dim pulse — see _selectPulse above. Ignored for
+          // hit-testing throughout, since the tap that triggered it has
+          // already been consumed by the tile. A RepaintBoundary isolates
+          // this from the grid so neither forces the other to repaint.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _selectPulse,
+                  builder: (context, child) {
+                    final t = _selectPulse.value;
+                    if (t <= 0.001) return const SizedBox.shrink();
+                    return ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.32 * t),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
           Positioned(
             top: 0,
             left: 0,
@@ -204,86 +258,88 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
                   : AnimatedBuilder(
                       key: const ValueKey('collapsing-header'),
                       animation: _collapse,
-                    // `child` is the fully static content — a dark scrim (so the
-                    // title/segmented control stay legible over colorful photos,
-                    // no blur, matching the skeuomorphic material language rather
-                    // than glassmorphism) plus the header itself. Wrapping it in
-                    // RepaintBoundary lets the engine cache it as one layer and
-                    // just re-*position* that layer every scroll frame instead of
-                    // re-rastering the gradient/text/segmented-control each tick.
-                    child: RepaintBoundary(
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    SkeuPalette.backgroundBottom
-                                        .withValues(alpha: 0.96),
-                                    SkeuPalette.backgroundBottom
-                                        .withValues(alpha: 0.86),
-                                    SkeuPalette.backgroundBottom
-                                        .withValues(alpha: 0),
-                                  ],
-                                  stops: const [0, 0.62, 1],
+                      // `child` is the fully static content — a dark scrim (so the
+                      // title/segmented control stay legible over colorful photos,
+                      // no blur, matching the skeuomorphic material language rather
+                      // than glassmorphism) plus the header itself. Wrapping it in
+                      // RepaintBoundary lets the engine cache it as one layer and
+                      // just re-*position* that layer every scroll frame instead of
+                      // re-rastering the gradient/text/segmented-control each tick.
+                      child: RepaintBoundary(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      SkeuPalette.backgroundBottom
+                                          .withValues(alpha: 0.96),
+                                      SkeuPalette.backgroundBottom
+                                          .withValues(alpha: 0.86),
+                                      SkeuPalette.backgroundBottom
+                                          .withValues(alpha: 0),
+                                    ],
+                                    stops: const [0, 0.62, 1],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          SafeArea(
-                            bottom: false,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Padding(
-                                    padding:
-                                        EdgeInsets.only(left: 4, bottom: 16),
-                                    child: Text(
-                                      'Our Photos',
-                                      style: TextStyle(
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.5,
+                            SafeArea(
+                              bottom: false,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const Padding(
+                                      padding:
+                                          EdgeInsets.only(left: 4, bottom: 16),
+                                      child: Text(
+                                        'Our Photos',
+                                        style: TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.5,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  SkeuSegmentedControl(
-                                    labels: const [
-                                      'Photos',
-                                      'Timeline',
-                                      'Albums'
-                                    ],
-                                    selected: _segment,
-                                    onSelected: (value) => setState(() {
-                                      _segment = value;
-                                      _collapse.animateTo(
-                                        0,
-                                        duration:
-                                            const Duration(milliseconds: 180),
-                                        curve: Curves.easeOutCubic,
-                                      );
-                                    }),
-                                  ),
-                                ],
+                                    SkeuSegmentedControl(
+                                      labels: const [
+                                        'Photos',
+                                        'Timeline',
+                                        'Albums'
+                                      ],
+                                      selected: _segment,
+                                      onSelected: (value) => setState(() {
+                                        _segment = value;
+                                        _collapse.animateTo(
+                                          0,
+                                          duration:
+                                              const Duration(milliseconds: 180),
+                                          curve: Curves.easeOutCubic,
+                                        );
+                                      }),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                      builder: (context, child) => IgnorePointer(
+                        ignoring: _collapse.value > 0.5,
+                        child: Transform.translate(
+                          offset: Offset(0, -topPadding * _collapse.value),
+                          child: child,
+                        ),
                       ),
                     ),
-                    builder: (context, child) => IgnorePointer(
-                      ignoring: _collapse.value > 0.5,
-                      child: Transform.translate(
-                        offset: Offset(0, -topPadding * _collapse.value),
-                        child: child,
-                      ),
-                    ),
-                  ),
             ),
           ),
         ],
@@ -297,6 +353,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen>
 /// delete action is never accidentally scrolled out of reach.
 class _SelectionBar extends StatelessWidget {
   const _SelectionBar({
+    super.key,
     required this.count,
     required this.onCancel,
     required this.onDelete,
@@ -437,9 +494,12 @@ class _PhotosGrid extends ConsumerWidget {
                 onLongPress:
                     selectionMode ? null : () => onEnterSelection(asset.id),
                 child: AnimatedScale(
-                  scale: removing ? 0.55 : 1,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeInCubic,
+                  // A held tile "pops" slightly larger with a springy
+                  // overshoot as it lifts into selection — the visual half
+                  // of the same moment as the haptic tap and the blur pulse.
+                  scale: removing ? 0.55 : (selected ? 1.05 : 1),
+                  duration: Duration(milliseconds: removing ? 220 : 260),
+                  curve: removing ? Curves.easeInCubic : Curves.easeOutBack,
                   child: AnimatedOpacity(
                     opacity: removing ? 0 : 1,
                     duration: const Duration(milliseconds: 220),
@@ -495,8 +555,7 @@ class _PhotosGrid extends ConsumerWidget {
                                   texture: false,
                                   child: AnimatedScale(
                                     scale: selected ? 1 : 0,
-                                    duration:
-                                        const Duration(milliseconds: 160),
+                                    duration: const Duration(milliseconds: 160),
                                     curve: Curves.easeOutBack,
                                     child: const Icon(
                                       Icons.check_rounded,

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/skeuomorphic.dart';
 import '../photos/asset_thumbnail.dart';
 import '../photos/gallery_index_controller.dart';
@@ -16,9 +19,12 @@ class TrashScreen extends ConsumerStatefulWidget {
 
 class _TrashScreenState extends ConsumerState<TrashScreen> {
   final Set<String> _selected = {};
+  final Set<String> _removingIds = {};
+  final _auth = LocalAuthentication();
   bool _busy = false;
 
   void _toggle(String assetId) {
+    HapticFeedback.selectionClick();
     setState(() {
       if (!_selected.remove(assetId)) _selected.add(assetId);
     });
@@ -26,37 +32,80 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 
   Future<void> _restoreSelected() async {
     final ids = _selected.toList();
-    setState(() => _busy = true);
+    setState(() {
+      _removingIds.addAll(ids);
+      _selected.clear();
+      _busy = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted) return;
     final repo = ref.read(galleryRepositoryProvider);
     for (final id in ids) {
       await repo.restoreFromTrash(id);
     }
     if (!mounted) return;
     setState(() {
-      _selected.clear();
+      _removingIds.removeAll(ids);
       _busy = false;
     });
+  }
+
+  /// Requires the device's own lock — password, fingerprint, or face — before
+  /// a permanent, unrecoverable deletion can even be attempted. Falls back to
+  /// device credentials (not just biometrics) since not every phone has
+  /// fingerprint/face set up, matching what was asked for.
+  Future<bool> _authenticate() async {
+    try {
+      final canCheck =
+          await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
+      if (!canCheck) return true; // No lock configured on this device at all.
+      return await _auth.authenticate(
+        localizedReason: 'Confirm to permanently delete',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+        ),
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _deleteForeverSelected(List<GalleryAsset> allTrashed) async {
     final targets = allTrashed.where((a) => _selected.contains(a.id)).toList();
     if (targets.isEmpty) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => _ConfirmDialog(
-        title: 'Delete forever?',
-        message: targets.length == 1
-            ? 'This photo will be permanently removed from your device. '
-                "This can't be undone."
-            : 'These ${targets.length} items will be permanently removed '
-                "from your device. This can't be undone.",
-        confirmLabel: 'Delete Forever',
-      ),
+    final authenticated = await _authenticate();
+    if (!authenticated) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Authentication required to delete.')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final confirmed = await SkeuConfirmDialog.show(
+      context,
+      icon: Icons.warning_amber_rounded,
+      title: 'Gone forever',
+      danger: true,
+      message: targets.length == 1
+          ? 'This photo will be permanently erased from your device. '
+              "You won't be able to get it back."
+          : 'These ${targets.length} items will be permanently erased '
+              "from your device. You won't be able to get them back.",
+      confirmLabel: 'Delete',
     );
     if (confirmed != true) return;
 
-    setState(() => _busy = true);
+    setState(() {
+      _removingIds.addAll(_selected);
+      _busy = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted) return;
+
     final indexer = ref.read(mediaIndexerProvider);
     final repo = ref.read(galleryRepositoryProvider);
 
@@ -75,6 +124,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (!mounted) return;
     setState(() {
       _selected.removeAll(deletedIds);
+      _removingIds.removeAll(deletedIds);
       _busy = false;
     });
   }
@@ -95,7 +145,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Items stay here until you delete them permanently.',
+              'Items are deleted forever after 20 days.',
               style: TextStyle(color: SkeuPalette.muted, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -136,30 +186,43 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SkeuButton(
-                              icon: Icons.restore_rounded,
-                              label: 'Restore',
-                              onTap: _busy || _selected.isEmpty
-                                  ? null
-                                  : _restoreSelected,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SkeuButton(
-                              icon: Icons.delete_forever_rounded,
-                              label: 'Delete Forever',
-                              onTap: _busy || _selected.isEmpty
-                                  ? null
-                                  : () => _deleteForeverSelected(assets),
-                            ),
-                          ),
-                        ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: _selected.isEmpty ? 0 : 1,
+                          child: _selected.isEmpty
+                              ? const SizedBox(width: double.infinity)
+                              : Padding(
+                                  padding: const EdgeInsets.only(bottom: 14),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: SkeuButton(
+                                          icon: Icons.restore_rounded,
+                                          label: 'Restore',
+                                          onTap:
+                                              _busy ? null : _restoreSelected,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: SkeuButton(
+                                          icon: Icons.delete_forever_rounded,
+                                          label: 'Delete Forever',
+                                          onTap: _busy
+                                              ? null
+                                              : () => _deleteForeverSelected(
+                                                  assets),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
                       ),
-                      const SizedBox(height: 14),
                       Expanded(
                         child: GridView.builder(
                           physics: const BouncingScrollPhysics(),
@@ -172,10 +235,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                           itemCount: assets.length,
                           itemBuilder: (context, index) {
                             final asset = assets[index];
-                            final selected = _selected.contains(asset.id);
                             return _TrashTile(
                               asset: asset,
-                              selected: selected,
+                              selected: _selected.contains(asset.id),
+                              removing: _removingIds.contains(asset.id),
                               onTap: () => _toggle(asset.id),
                             );
                           },
@@ -197,132 +260,87 @@ class _TrashTile extends StatelessWidget {
   const _TrashTile({
     required this.asset,
     required this.selected,
+    required this.removing,
     required this.onTap,
   });
 
   final GalleryAsset asset;
   final bool selected;
+  final bool removing;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: DecoratedBox(
-              decoration: const BoxDecoration(color: SkeuPalette.graphiteDeep),
-              child: Opacity(
-                opacity: selected ? 0.5 : 1,
-                child: Image(
-                  image: AssetThumbnailProvider(asset.platformId),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (context, error, stack) =>
-                      const SizedBox.shrink(),
+      child: AnimatedScale(
+        scale: removing ? 0.55 : (selected ? 1.05 : 1),
+        duration: Duration(milliseconds: removing ? 220 : 260),
+        curve: removing ? Curves.easeInCubic : Curves.easeOutBack,
+        child: AnimatedOpacity(
+          opacity: removing ? 0 : 1,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInCubic,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: DecoratedBox(
+                  decoration:
+                      const BoxDecoration(color: SkeuPalette.graphiteDeep),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 160),
+                    opacity: selected ? 0.5 : 1,
+                    child: Image(
+                      image: AssetThumbnailProvider(asset.platformId),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      errorBuilder: (context, error, stack) =>
+                          const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          if (selected)
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: SkeuPalette.titanium, width: 3),
+              IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 160),
+                  opacity: selected ? 1 : 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: SkeuPalette.titanium, width: 3),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: SizedBox.square(
-              dimension: 26,
-              child: SkeuContainer(
-                material:
-                    selected ? SkeuMaterial.aluminum : SkeuMaterial.graphite,
-                radius: 13,
-                lift: 0.5,
-                texture: false,
-                child: selected
-                    ? const Icon(
+              Positioned(
+                top: 6,
+                right: 6,
+                child: SizedBox.square(
+                  dimension: 26,
+                  child: SkeuContainer(
+                    material: selected
+                        ? SkeuMaterial.aluminum
+                        : SkeuMaterial.graphite,
+                    radius: 13,
+                    lift: 0.5,
+                    texture: false,
+                    child: AnimatedScale(
+                      scale: selected ? 1 : 0,
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutBack,
+                      child: const Icon(
                         Icons.check_rounded,
                         size: 16,
                         color: Color(0xFF111111),
-                      )
-                    : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A destructive-action confirmation, styled to match the rest of the app
-/// (a machined graphite card) instead of a default Material [AlertDialog].
-class _ConfirmDialog extends StatelessWidget {
-  const _ConfirmDialog({
-    required this.title,
-    required this.message,
-    required this.confirmLabel,
-  });
-
-  final String title;
-  final String message;
-  final String confirmLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-      child: SkeuSurface(
-        material: SkeuMaterial.graphite,
-        radius: 20,
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: SkeuPalette.ink,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              style: const TextStyle(color: SkeuPalette.muted, fontSize: 14),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: SkeuButton(
-                    label: 'Cancel',
-                    compact: true,
-                    onTap: () => Navigator.of(context).pop(false),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SkeuButton(
-                    label: confirmLabel,
-                    compact: true,
-                    onTap: () => Navigator.of(context).pop(true),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import '../../core/providers.dart';
 import '../../models/gallery_asset.dart';
 import '../../models/media_status.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/skeuomorphic.dart';
 import 'asset_thumbnail.dart';
 
@@ -57,6 +58,7 @@ class _MediaViewerState extends ConsumerState<MediaViewer> {
   late List<GalleryAsset> _assets;
   late int _index;
   bool _chromeVisible = true;
+  String? _fadingOutId;
 
   @override
   void initState() {
@@ -98,11 +100,31 @@ class _MediaViewerState extends ConsumerState<MediaViewer> {
   }
 
   Future<void> _moveToTrash(GalleryAsset asset) async {
-    await ref.read(galleryRepositoryProvider).moveToRecycleBin(asset.id);
-    if (!mounted) return;
+    final confirmed = await SkeuConfirmDialog.show(
+      context,
+      icon: Icons.delete_outline_rounded,
+      title: 'Move to Trash?',
+      message: 'This item will be moved to the Trash. Items in the Trash '
+          'are automatically deleted forever after 20 days.',
+      confirmLabel: 'Move to Trash',
+    );
+    if (confirmed != true) return;
+
     final removedIndex = _assets.indexWhere((a) => a.id == asset.id);
     if (removedIndex == -1) return;
-    setState(() => _assets.removeAt(removedIndex));
+
+    // Fade the current page out before it actually leaves the list, rather
+    // than snapping straight to the next photo.
+    setState(() => _fadingOutId = asset.id);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+
+    await ref.read(galleryRepositoryProvider).moveToRecycleBin(asset.id);
+    if (!mounted) return;
+    setState(() {
+      _assets.removeAt(removedIndex);
+      _fadingOutId = null;
+    });
     if (_assets.isEmpty) {
       Navigator.of(context).maybePop();
       return;
@@ -166,6 +188,14 @@ class _MediaViewerState extends ConsumerState<MediaViewer> {
               },
               loadingBuilder: (context, event) => const Center(
                 child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+            IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _fadingOutId == asset.id ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeIn,
+                child: const ColoredBox(color: Colors.black),
               ),
             ),
             _TopBar(
